@@ -13,8 +13,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("🗳️ LSGD Election Explorer")
-st.caption("Use the sidebar pages to navigate. This is a simple landing page.")
+st.title("LSGD Election Explorer")
+st.caption("Use the sidebar pages to navigate.")
 
 # Global data controls in sidebar (applies across pages)
 data_controls()
@@ -22,7 +22,8 @@ data_controls()
 # Quick snapshot (so you know data is loading fine)
 try:
     df = load_data(get_data_path())
-    st.success(f"Loaded {len(df):,} rows · {len(df.columns)} columns")
+    st.success(f"Loaded {len(df):,} rows × {len(df.columns)} columns")
     st.dataframe(df.head(25), use_container_width=True)
 except Exception as e:
     st.error(f"Failed to load data: {e}")
+
