@@ -75,6 +75,50 @@ def color_rows_uniform_party(df_display: pd.DataFrame, party: str):
         return [f"background-color: {color}"] * len(_row)
     return df_display.style.apply(_all_rows_party, axis=1)
 
+def build_party_lb_performance(scope_df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
+    """
+    For the given scope (already filtered to District/Assembly if needed):
+      - Use Ward-tier rows only
+      - For each LBName: Party Votes, Share (% of total LB votes), Contested, Won
+      - Returns sorted by Share (%) desc then Party Votes desc.
+    """
+    if scope_df.empty:
+        return pd.DataFrame(columns=["LBName", "Party Votes", "Share (%)", "Contested", "Won"])
+
+    d = scope_df.copy()
+    if "TierNorm" in d.columns:
+        d = d[d["TierNorm"] == "Ward"].copy()
+    else:
+        d = d[d["Tier"].astype(str).str.title() == "Ward"].copy()
+    if d.empty:
+        return pd.DataFrame(columns=["LBName", "Party Votes", "Share (%)", "Contested", "Won"])
+
+    # Totals per LB
+    total_lb = d.groupby("LBName", as_index=False)["Votes"].sum().rename(columns={"Votes": "Total Votes"})
+    # Party aggregates
+    dp = d[d["Party"] == sel_party].copy()
+    party_votes = dp.groupby("LBName", as_index=False)["Votes"].sum().rename(columns={"Votes": "Party Votes"})
+    contested = dp.groupby("LBName", as_index=False).size().rename(columns={"size": "Contested"})
+    if "Rank" in dp.columns:
+        won = (dp[pd.to_numeric(dp["Rank"], errors="coerce").astype("Int64") == 1]
+               .groupby("LBName", as_index=False)
+               .size().rename(columns={"size": "Won"}))
+    else:
+        won = pd.DataFrame({"LBName": [], "Won": []})
+
+    out = pd.merge(total_lb, party_votes, on="LBName", how="left")
+    out = pd.merge(out, contested, on="LBName", how="left")
+    out = pd.merge(out, won, on="LBName", how="left")
+    for c in ["Party Votes", "Contested", "Won"]:
+        if c in out.columns:
+            out[c] = out[c].fillna(0).astype(int)
+        else:
+            out[c] = 0
+    out["Share (%)"] = np.where(out["Total Votes"] > 0, out["Party Votes"] / out["Total Votes"] * 100, 0.0)
+    out = out.drop(columns=["Total Votes"], errors="ignore")
+    out = out.sort_values(["Share (%)", "Party Votes", "LBName"], ascending=[False, False, True])
+    return out.reset_index(drop=True)
+
 def party_options_for_front(front: str) -> list[str]:
     pref = {"UDF": ["IUML", "INC"], "LDF": ["CPI(M)", "CPI"], "NDA": ["BJP"], "OTH": ["IND", "SDPI", "WPI"]}
     parties_data = (df[df["Front"] == front]["Party"].dropna().sort_values().unique().tolist()
@@ -300,23 +344,31 @@ def table_opponent_breakdown(scope_df: pd.DataFrame, sel_party: str) -> pd.DataF
     winners = d[d["Rank"] == 1][keys + ["Party"]].rename(columns={"Party": "WinnerParty"})
     runners = d[d["Rank"] == 2][keys + ["Party"]].rename(columns={"Party": "RunnerParty"})
 
+    # Ensure consistent dtype for merge keys
+    if "WinnerParty" in winners.columns:
+        winners["WinnerParty"] = winners["WinnerParty"].astype(str)
+    if "RunnerParty" in runners.columns:
+        runners["RunnerParty"] = runners["RunnerParty"].astype(str)
+
     # (A) Where selected party WON → count Runner-up parties
     wins_sel = winners[winners["WinnerParty"] == sel_party]
     ru_vs_selwin = (wins_sel.merge(runners, on=keys, how="left")
                     .groupby("RunnerParty", dropna=True).size().rename("Runner-up (when Selected Won)"))
-    ru_vs_selwin.index = ru_vs_selwin.index.fillna("UNKNOWN")
+    # Normalize index as string for safe merges later
+    ru_vs_selwin.index = ru_vs_selwin.index.fillna("UNKNOWN").astype(str)
 
     # (B) Where selected party was SECOND → count Winner parties
     sec_sel = runners[runners["RunnerParty"] == sel_party]
     win_vs_selsec = (sec_sel.merge(winners, on=keys, how="left")
-                     .groupby("WinnerParty", dropna=True).size().rename("Winners (when Selected Second)"))
-    win_vs_selsec.index = win_vs_selsec.index.fillna("UNKNOWN")
+                      .groupby("WinnerParty", dropna=True).size().rename("Winners (when Selected Second)"))
+    win_vs_selsec.index = win_vs_selsec.index.fillna("UNKNOWN").astype(str)
 
     # Combine
     all_parties = sorted(set(ru_vs_selwin.index.tolist()) | set(win_vs_selsec.index.tolist()), key=lambda x: str(x))
     out = pd.DataFrame({"Party": all_parties})
-    out = out.merge(ru_vs_selwin.reset_index().rename(columns={"RunnerParty": "Party"}), on="Party", how="left")
-    out = out.merge(win_vs_selsec.reset_index().rename(columns={"WinnerParty": "Party"}), on="Party", how="left")
+    out["Party"] = out["Party"].astype(str)
+    out = out.merge(ru_vs_selwin.reset_index().rename(columns={"RunnerParty": "Party"}).assign(Party=lambda df_: df_["Party"].astype(str)), on="Party", how="left")
+    out = out.merge(win_vs_selsec.reset_index().rename(columns={"WinnerParty": "Party"}).assign(Party=lambda df_: df_["Party"].astype(str)), on="Party", how="left")
     out[["Runner-up (when Selected Won)", "Winners (when Selected Second)"]] = \
         out[["Runner-up (when Selected Won)", "Winners (when Selected Second)"]].fillna(0).astype(int)
 
@@ -410,6 +462,25 @@ with tab_d:
         st.info("No VoteBin data available for this scope.")
     else:
         st.plotly_chart(fig_vote, use_container_width=True)
+
+    # Local Body performance (Ward-tier) table should be last in Assembly tab
+    st.subheader(f"Local Body performance (Ward-tier) — {sel_party} ({scope_label})")
+    t_lb_perf_a = build_party_lb_performance(scoped, sel_party)
+    if t_lb_perf_a.empty:
+        st.info("No Ward-tier rows available to compute LB performance.")
+    else:
+        styled_lb_a = color_rows_uniform_party(t_lb_perf_a, sel_party)
+        render_styled_table(styled_lb_a, fmt_numbers=["Party Votes", "Contested", "Won"], fmt_perc=["Share (%)"])
+
+    # Local Body performance table should appear last; hide for All Kerala
+    if sel_district != "All Kerala":
+        st.subheader(f"Local Body performance (Ward-tier) — {sel_party} ({scope_label})")
+        t_lb_perf_d = build_party_lb_performance(scoped, sel_party)
+        if t_lb_perf_d.empty:
+            st.info("No Ward-tier rows available to compute LB performance.")
+        else:
+            styled_lb_d = color_rows_uniform_party(t_lb_perf_d, sel_party)
+            render_styled_table(styled_lb_d, fmt_numbers=["Party Votes", "Contested", "Won"], fmt_perc=["Share (%)"])
 
 # ---------- Assembly Tab ----------
 with tab_a:
