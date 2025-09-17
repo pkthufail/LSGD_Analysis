@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import re
 import plotly.express as px
+import html
 
 from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, PARTY_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS
@@ -239,6 +240,39 @@ _STRENGTH_ORDER = [
     "-500 or less", "-200 to -499", "-100 to -199", "-50 to -99", "-1 to -49",
     "0", "1-49", "50-99", "100-199", "200-499", "500+"
 ]
+
+
+STRENGTH_COLOR_MAP = {
+    "-500 or less": "#f8d7da",
+    "-200 to -499": "#f9d6dc",
+    "-100 to -199": "#fbd2d9",
+    "-50 to -99": "#fde2e4",
+    "-1 to -49": "#fff1e6",
+    "0": "#f8f9fa",
+    "1-49": "#e8f6ef",
+    "50-99": "#d4f3e4",
+    "100-199": "#bcefd4",
+    "200-499": "#a3e8c4",
+    "500+": "#8bdcb3",
+}
+
+WON_NAME_COLOR = "#2e7d32"
+NOT_WON_NAME_COLOR = "#c62828"
+
+def style_strength_table(df_display: pd.DataFrame, band_col: str = "Strength Band") -> Styler:
+    def _row_style(row: pd.Series):
+        band = str(row.get(band_col, ""))
+        color = STRENGTH_COLOR_MAP.get(band, DEFAULT_BG_COLOR)
+        return [f"background-color: {color}"] * len(row)
+    return df_display.style.apply(_row_style, axis=1)
+
+def format_vote_names(names: list[str], color: str) -> str:
+    if not names:
+        return "—"
+    return ", ".join(
+        f"<span style='color:{color};font-weight:600'>" + html.escape(name) + "</span>"
+        for name in names
+    )
 
 def _lead_to_strength(lead: float | int | None) -> str | None:
     if pd.isna(lead):
@@ -685,6 +719,8 @@ with tab_l:
         if legend_map:
             render_color_legend(legend_map, title="Party colors")
 
+
+
     # ===== STRENGTH ANALYSIS (Lead/Trail split, show all categories present) =====
     st.subheader("📶 Strength Analysis")
     if lb_front.empty:
@@ -702,30 +738,33 @@ with tab_l:
         else:
             s_df = pd.DataFrame({"Strength": s_series, "WardName": lb_front["WardName"]}).dropna(subset=["Strength"])
             s_df["Strength"] = pd.Categorical(s_df["Strength"], categories=_STRENGTH_ORDER, ordered=True)
-            agg = (s_df.groupby("Strength", observed=True, as_index=False)
-                     .agg(Wards=("WardName", "count"),
-                          Names=("WardName", lambda x: ", ".join(sorted(map(str, x.unique())))))
-                     .sort_values("Strength"))
+            agg = (
+                s_df.groupby("Strength", observed=True, as_index=False)
+                .agg(
+                    Wards=("WardName", "count"),
+                    Names=("WardName", lambda x: ", ".join(sorted(map(str, x.unique()))))
+                )
+                .sort_values("Strength")
+            )
 
-            is_trail = agg["Strength"].astype(str).startsWith("-") if hasattr(str, "startsWith") else agg["Strength"].astype(str).str.startswith("-")
             is_trail = agg["Strength"].astype(str).str.startswith("-")
-            is_zero  = agg["Strength"].astype(str).eq("0")
-            lead_tbl  = agg[~is_trail & ~is_zero]
-            trail_tbl = agg[ is_trail ]
+            is_zero = agg["Strength"].astype(str).eq("0")
+            lead_tbl = agg[~is_trail & ~is_zero]
+            trail_tbl = agg[is_trail]
 
-            st.markdown("**Lead**")
-            if lead_tbl.empty:
-                st.caption("No lead categories.")
-            else:
-                for _, r in lead_tbl.iterrows():
-                    st.markdown(f"**{r['Strength']}**: **{int(r['Wards']):,}** — {r['Names']}")
+            def _render_strength_table(frame: pd.DataFrame, title: str) -> None:
+                st.markdown(f"**{title}**")
+                if frame.empty:
+                    st.caption(f"No {title.lower()} categories.")
+                    return
+                table = frame.copy()
+                table["Wards"] = table["Wards"].astype(int)
+                table = table.rename(columns={"Strength": "Strength Band"})
+                styled = style_strength_table(table)
+                render_styled_table(styled, fmt_numbers=["Wards"])
 
-            st.markdown("**Trail**")
-            if trail_tbl.empty:
-                st.caption("No trail categories.")
-            else:
-                for _, r in trail_tbl.iterrows():
-                    st.markdown(f"**{r['Strength']}**: **{int(r['Wards']):,}** — {r['Names']}")
+            _render_strength_table(lead_tbl, "Lead")
+            _render_strength_table(trail_tbl, "Trail")
 
     # ===== VOTEBIN LIST (color ward names by win/loss) =====
     st.subheader("🧊 VoteBin Summary (Won/Not won names colour-coded)")
@@ -746,11 +785,15 @@ with tab_l:
 
         def _summarize_vote_bin(g: pd.DataFrame) -> dict:
             ranks = g["Rank"].astype("Int64") if "Rank" in g.columns else pd.Series(pd.NA, index=g.index, dtype="Int64")
-            names: list[tuple[str, str]] = []
+            won = []
+            not_won = []
             for nm, rk in zip(g["WardName"], ranks):
-                status = "Won" if (pd.notna(rk) and rk == 1) else "Not won"
-                names.append((str(nm), status))
-            return {"count": int(len(g)), "names": names}
+                name = str(nm)
+                if pd.notna(rk) and rk == 1:
+                    won.append(name)
+                else:
+                    not_won.append(name)
+            return {"count": int(len(g)), "won": sorted(won), "not": sorted(not_won)}
 
         grp = (
             tmp.groupby("VoteBinStr", observed=True)[group_cols]
@@ -758,21 +801,18 @@ with tab_l:
             .reset_index(name="data")
         )
 
-        won_col, lost_col = "#2e7d32", "#c62828"
-        for _, row in grp.iterrows():
-            names = row["data"]["names"]
-            if not names:
-                continue
-            parts = []
-            for nm, status in names:
-                color = won_col if status == "Won" else lost_col
-                parts.append(f"<span style='color:{color};font-weight:600'>{nm}</span>")
-            names_html = ", ".join(parts)
-            st.markdown(
-                f"**{row['VoteBinStr']}**: **{row['data']['count']:,}** — {names_html}",
-                unsafe_allow_html=True
-            )
-
+        if grp.empty:
+            st.info("No VoteBin data available for this front.")
+        else:
+            table = grp.copy()
+            table["Count"] = table["data"].apply(lambda d: int(d["count"]))
+            table["Won Names"] = table["data"].apply(lambda d: format_vote_names(d["won"], WON_NAME_COLOR))
+            table["Not Won Names"] = table["data"].apply(lambda d: format_vote_names(d["not"], NOT_WON_NAME_COLOR))
+            table = table.rename(columns={"VoteBinStr": "VoteBin"})
+            table = table[["VoteBin", "Count", "Won Names", "Not Won Names"]]
+            styled = color_rows_uniform_front(table, sel_front)
+            styled = styled.format({"Won Names": lambda x: x, "Not Won Names": lambda x: x}, escape=False)
+            render_styled_table(styled, fmt_numbers=["Count"])
     # ===== OPPONENT BREAKDOWN by FRONT =====
     st.subheader(f"🤝 Opponent Breakdown — {sel_front} ({scope_label})")
     t_opp_l = table_opponent_front(lb_ward, sel_front)
