@@ -646,6 +646,64 @@ with tab_a:
         else:
             st.plotly_chart(fig_vote_a, use_container_width=True)
 
+        if asm_ward.empty or "Votes" not in asm_ward.columns:
+            st.info("No ward-level vote data available for this assembly.")
+        else:
+            party_contested = asm_ward[asm_ward["Party"] == sel_party].copy()
+            if party_contested.empty:
+                st.info(f"{sel_party} did not contest any wards in this assembly.")
+            else:
+                key_cols = _ward_join_keys(asm_ward) or ["WardName"]
+                total_by_ward = asm_ward.groupby(key_cols)["Votes"].sum().rename("Total Votes")
+                party_by_ward = party_contested.groupby(key_cols)["Votes"].sum().rename("Party Votes")
+                ward_summary = party_by_ward.to_frame().join(total_by_ward, how="left")
+                ward_summary = ward_summary[ward_summary["Total Votes"] > 0]
+                if ward_summary.empty:
+                    st.info("No ward-level totals available to compute vote shares.")
+                else:
+                    summary = ward_summary.reset_index()
+                    meta_candidates = [c for c in ["LBName", "WardName", "WardNo", "WardCode"] if c in asm_ward.columns]
+                    extra_cols = [c for c in meta_candidates if c not in summary.columns]
+                    if extra_cols:
+                        meta_df = asm_ward[[*key_cols, *extra_cols]].drop_duplicates(key_cols)
+                        summary = summary.merge(meta_df, on=key_cols, how="left")
+                    summary["Party Votes"] = summary["Party Votes"].astype(int)
+                    summary["Total Votes"] = summary["Total Votes"].astype(int)
+                    summary["Share (%)"] = np.where(summary["Total Votes"] > 0, summary["Party Votes"] / summary["Total Votes"] * 100, 0.0)
+                    column_order = []
+                    for col in ["LBName", "WardName", "WardNo", "WardCode"]:
+                        if col in summary.columns:
+                            column_order.append(col)
+                    column_order += ["Party Votes", "Total Votes", "Share (%)"]
+                    column_order = list(dict.fromkeys(column_order))
+                    strongest = summary[summary["Share (%)"] > 50].sort_values(["Share (%)", "Party Votes"], ascending=[False, False]).head(20)
+                    weakest = summary[summary["Share (%)"] < 50].sort_values(["Share (%)", "Party Votes"], ascending=[True, False]).head(20)
+
+                    def _render_ward_list(frame: pd.DataFrame, title: str, empty_message: str) -> None:
+                        st.subheader(title)
+                        if frame.empty:
+                            st.info(empty_message)
+                            return
+                        table = frame[column_order].copy()
+                        for col in ["Party Votes", "Total Votes"]:
+                            if col in table.columns:
+                                table[col] = table[col].astype(int)
+                        styled_table = color_rows_uniform_party(table, sel_party)
+                        fmt_nums = [c for c in ["Party Votes", "Total Votes"] if c in table.columns]
+                        render_styled_table(styled_table, fmt_numbers=fmt_nums, fmt_perc=["Share (%)"])
+
+                    _render_ward_list(
+                        strongest,
+                        f"{sel_party} - Strongest Wards ({scope_label})",
+                        f"No wards where {sel_party} crossed 50% vote share in this assembly.",
+                    )
+                    _render_ward_list(
+                        weakest,
+                        f"{sel_party} - Weakest Wards ({scope_label})",
+                        f"No wards where {sel_party} fell below 50% vote share in this assembly.",
+                    )
+
+
 # ---------- Local Body Tab ----------
 with tab_l:
     st.markdown("#### Scope")
@@ -719,7 +777,7 @@ with tab_l:
             s_df["Strength"] = pd.Categorical(s_df["Strength"], categories=_STRENGTH_ORDER, ordered=True)
 
             agg = (
-                s_df.groupby("Strength", as_index=False)
+                s_df.groupby("Strength", observed=True, as_index=False)
                     .agg(
                         Wards=("WardName", "count"),
                         Names=("WardName", lambda x: ", ".join(sorted(map(str, x.unique()))))

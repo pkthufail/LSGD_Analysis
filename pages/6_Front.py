@@ -92,9 +92,24 @@ def table_votes_share_front(scope_df: pd.DataFrame, front: str) -> pd.DataFrame:
     out = out.sort_values("Tier").drop(columns=["TierNorm"]).rename(columns={"Tier":"Tier"})
     return out[["Tier","Front Votes","Total Votes","Share (%)"]]
 
+def _rank_to_label(v):
+    if pd.isna(v):
+        return v
+    try:
+        n = int(float(v))
+    except Exception:
+        return v
+    if n == 1:
+        return "Won"
+    suffix = "th"
+    if not 11 <= (n % 100) <= 13:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def table_lbtype_performance_front(scope_df: pd.DataFrame, front: str, include_block_district: bool = False) -> pd.DataFrame:
     """
-    LBType × Ranks (by Tier):
+    LBType x Ranks (by Tier):
       - include_block_district=False: Ward-tier only (Grama, Municipality, Corporation)
       - include_block_district=True: add Block & District rows
     Returns: LBType | Won | 2 | 3 | ... | Contested | Strike Rate (%)
@@ -112,34 +127,112 @@ def table_lbtype_performance_front(scope_df: pd.DataFrame, front: str, include_b
         base_rows += ["Block", "District"]
 
     d["LBType"] = pd.Categorical(d["LBType"], categories=base_rows, ordered=True)
+    d["Rank"] = pd.to_numeric(d["Rank"], errors="coerce")
+    d = d.dropna(subset=["Rank"])
+    if d.empty:
+        return pd.DataFrame(columns=["LBType", "Won", "Contested", "Strike Rate (%)"])
+    d["Rank"] = d["Rank"].astype(int)
+
     xt = pd.crosstab(d["LBType"], d["Rank"]).fillna(0).astype(int)
     xt = xt.reindex(base_rows, fill_value=0)
 
-    # Rename numeric rank columns to labels: 1->Won, 2->2nd, 3->3rd, ...
-    def _rank_to_label(v):
-        try:
-            n = int(v)
-        except Exception:
-            return v
-        if n == 1:
-            return "Won"
-        suf = "th"
-        if not 11 <= (n % 100) <= 13:
-            suf = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-        return f"{n}{suf}"
+    numeric_cols = [
+        c for c in xt.columns
+        if isinstance(c, (int, float, np.integer, np.floating)) and not pd.isna(c)
+    ]
+    rank_numeric = sorted({int(c) for c in numeric_cols})
+    rename_map = {c: _rank_to_label(c) for c in numeric_cols}
+    xt = xt.rename(columns=rename_map)
 
-    rank_numeric = sorted([int(c) for c in xt.columns if isinstance(c, (int, float, np.integer, np.floating))])
-    xt = xt.rename(columns={c: _rank_to_label(c) for c in xt.columns})
-
-    # Totals and strike rate after rename
-    rank_label_cols = [_rank_to_label(n) for n in rank_numeric]
-    present_cols = [c for c in rank_label_cols if c in xt.columns]
+    rank_labels = [_rank_to_label(n) for n in rank_numeric]
+    present_cols = [c for c in rank_labels if c in xt.columns]
     xt["Contested"] = xt[present_cols].sum(axis=1) if present_cols else 0
     xt["Strike Rate (%)"] = np.where(xt["Contested"] > 0, xt.get("Won", 0) / xt["Contested"] * 100, 0.0)
 
-    col_order = (["Won"] if "Won" in xt.columns else []) + [c for c in rank_label_cols if c != "Won" and c in xt.columns] + ["Contested", "Strike Rate (%)"]
+    col_order: list[str] = []
+    if "Won" in xt.columns:
+        col_order.append("Won")
+    col_order.extend([c for c in rank_labels if c != "Won" and c in xt.columns])
+    col_order += ["Contested", "Strike Rate (%)"]
     xt = xt[col_order].reset_index()
     return xt
+
+
+def style_rows_by_party(df_display: pd.DataFrame) -> Styler:
+    def _row_style(row: pd.Series):
+        party = str(row.get("Party", "")).strip()
+        color = PARTY_BG_COLORS.get(party, DEFAULT_BG_COLOR)
+        return [f"background-color: {color}"] * len(row)
+    return df_display.style.apply(_row_style, axis=1)
+
+
+def table_party_lbtype_wins(scope_df: pd.DataFrame, front: str) -> pd.DataFrame:
+    required = {"Front", "LBType", "Party"}
+    if not required.issubset(scope_df.columns):
+        return pd.DataFrame()
+
+    d = scope_df.copy()
+    if "TierNorm" not in d.columns and "Tier" in d.columns:
+        d["TierNorm"] = d["Tier"].astype(str).str.title()
+
+    d = d[(d["Front"] == front) & (d["TierNorm"].astype(str).str.title() == "Ward")]
+    if "Rank" in d.columns:
+        ranks = pd.to_numeric(d["Rank"], errors="coerce")
+        d = d[ranks == 1]
+    if d.empty:
+        return pd.DataFrame()
+
+    d["Party"] = d["Party"].fillna("UNKNOWN").astype(str).str.strip().replace("", "UNKNOWN")
+    d["LBType"] = pd.Categorical(d["LBType"], categories=LBTYPE_ORDER, ordered=True)
+    pivot = pd.crosstab(d["Party"], d["LBType"]).reindex(columns=LBTYPE_ORDER, fill_value=0)
+    pivot = pivot.loc[:, pivot.sum(axis=0) > 0]
+    if pivot.empty:
+        return pd.DataFrame()
+
+    pivot["Total"] = pivot.sum(axis=1)
+    pivot = pivot.sort_values("Total", ascending=False).reset_index().rename(columns={"Party": "Party"})
+    return pivot
+
+
+def table_party_rank_summary(scope_df: pd.DataFrame, front: str) -> pd.DataFrame:
+    required = {"Front", "Party", "Rank"}
+    if not required.issubset(scope_df.columns):
+        return pd.DataFrame()
+
+    d = scope_df.copy()
+    if "TierNorm" not in d.columns and "Tier" in d.columns:
+        d["TierNorm"] = d["Tier"].astype(str).str.title()
+
+    d = d[(d["Front"] == front) & (d["TierNorm"].astype(str).str.title() == "Ward")]
+    if d.empty:
+        return pd.DataFrame()
+
+    d["Party"] = d["Party"].fillna("UNKNOWN").astype(str).str.strip().replace("", "UNKNOWN")
+    d["Rank"] = pd.to_numeric(d["Rank"], errors="coerce")
+    d = d.dropna(subset=["Rank"])
+    if d.empty:
+        return pd.DataFrame()
+    d["Rank"] = d["Rank"].astype(int)
+
+    cross = pd.crosstab(d["Party"], d["Rank"]).astype(int)
+    numeric_cols = [c for c in cross.columns if isinstance(c, (int, np.integer))]
+    rank_labels = [_rank_to_label(n) for n in sorted(numeric_cols)]
+    rename_map = {c: _rank_to_label(c) for c in numeric_cols}
+    cross = cross.rename(columns=rename_map)
+
+    ordered_cols = []
+    if "Won" in cross.columns:
+        ordered_cols.append("Won")
+    ordered_cols.extend([c for c in rank_labels if c != "Won" and c in cross.columns])
+    cross["Contested"] = cross[ordered_cols].sum(axis=1) if ordered_cols else 0
+    cross["Strike Rate (%)"] = np.where(cross["Contested"] > 0, cross.get("Won", 0) / cross["Contested"] * 100, 0.0)
+
+    ordered_cols += ["Contested", "Strike Rate (%)"]
+    result = cross[ordered_cols].reset_index().rename(columns={"index": "Party"})
+    sort_cols = [c for c in ["Won", "Contested"] if c in result.columns]
+    if sort_cols:
+        result = result.sort_values(by=sort_cols, ascending=[False] * len(sort_cols))
+    return result.reset_index(drop=True)
 
 # ---------- Strength helpers ----------
 _STRENGTH_ORDER = [
@@ -183,7 +276,7 @@ def _build_strength_chart_front(scope_df: pd.DataFrame, sel_front: str):
     strength_summary = (
         pd.DataFrame({"Strength": s})
         .dropna()
-        .groupby("Strength", as_index=False)
+        .groupby("Strength", observed=True, as_index=False)
         .size().rename(columns={"size": "Wards"})
     )
     if strength_summary.empty:
@@ -356,6 +449,19 @@ with tab_d:
         # Legend for selected Front color
         render_color_legend({sel_front: FRONT_BG_COLORS.get(sel_front, DEFAULT_BG_COLOR)}, title="Row color")
 
+    st.subheader(f"{sel_front} - Party-wise Ward Wins by LBType ({scope_label})")
+    t_party_wins = table_party_lbtype_wins(scoped, sel_front)
+    if t_party_wins.empty:
+        st.info("No ward winners available for this scope.")
+    else:
+        num_cols = [c for c in t_party_wins.columns if c != "Party"]
+        styled_party = style_rows_by_party(t_party_wins)
+        render_styled_table(styled_party, fmt_numbers=num_cols)
+        legend_map = {p: PARTY_BG_COLORS.get(p, DEFAULT_BG_COLOR) for p in t_party_wins["Party"].astype(str).tolist()}
+        if legend_map:
+            render_color_legend(legend_map, title="Party colors")
+
+
     # OPPONENT BREAKDOWN by FRONT — TABLE
     st.subheader(f"🤝 Opponent Breakdown — {sel_front} ({scope_label})")
     t_opp = table_opponent_front(scoped, sel_front)
@@ -439,17 +545,6 @@ with tab_a:
             df_p["Rank"] = pd.to_numeric(df_p["Rank"], errors="coerce").astype("Int64")
             ct = pd.crosstab(df_p["LBName"], df_p["Rank"]).fillna(0).astype(int)
             # Rename numeric rank columns to labels: 1->Won, 2->2nd, 3->3rd, ...
-            def _rank_to_label(v):
-                try:
-                    n = int(v)
-                except Exception:
-                    return v
-                if n == 1:
-                    return "Won"
-                suf = "th"
-                if not 11 <= (n % 100) <= 13:
-                    suf = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-                return f"{n}{suf}"
             all_ranks = sorted([int(c) for c in ct.columns if isinstance(c, (int, float, np.integer, np.floating))])
             ct = ct.rename(columns={c: _rank_to_label(c) for c in ct.columns})
             ordered_cols = (["Won"] if "Won" in ct.columns else []) + [
@@ -478,6 +573,19 @@ with tab_a:
             )
             render_styled_table(styled_t2)
             render_color_legend({sel_front: FRONT_BG_COLORS.get(sel_front, DEFAULT_BG_COLOR)}, title="Row color")
+
+        st.subheader(f"{sel_front} - Party-wise Ward Performance ({scope_label})")
+        t_party_summary = table_party_rank_summary(scoped, sel_front)
+        if t_party_summary.empty:
+            st.info("No ward-tier party performance data for this scope.")
+        else:
+            num_cols = [c for c in t_party_summary.columns if c not in ["Party", "Strike Rate (%)"]]
+            styled_party = style_rows_by_party(t_party_summary)
+            render_styled_table(styled_party, fmt_numbers=num_cols, fmt_perc=["Strike Rate (%)"])
+            legend_map = {p: PARTY_BG_COLORS.get(p, DEFAULT_BG_COLOR) for p in t_party_summary["Party"].astype(str).tolist()}
+            if legend_map:
+                render_color_legend(legend_map, title="Party colors")
+
 
         # OPPONENT BREAKDOWN by FRONT — TABLE
         st.subheader(f"🤝 {sel_front} — Opponent Breakdown ({scope_label})")
@@ -564,6 +672,19 @@ with tab_l:
             unsafe_allow_html=True,
         )
 
+
+    st.subheader(f"{sel_front} - Party-wise Ward Performance ({scope_label})")
+    t_party_summary_lb = table_party_rank_summary(scoped, sel_front)
+    if t_party_summary_lb.empty:
+        st.info("No ward-tier party performance data for this local body.")
+    else:
+        num_cols = [c for c in t_party_summary_lb.columns if c not in ["Party", "Strike Rate (%)"]]
+        styled_party_lb = style_rows_by_party(t_party_summary_lb)
+        render_styled_table(styled_party_lb, fmt_numbers=num_cols, fmt_perc=["Strike Rate (%)"])
+        legend_map = {p: PARTY_BG_COLORS.get(p, DEFAULT_BG_COLOR) for p in t_party_summary_lb["Party"].astype(str).tolist()}
+        if legend_map:
+            render_color_legend(legend_map, title="Party colors")
+
     # ===== STRENGTH ANALYSIS (Lead/Trail split, show all categories present) =====
     st.subheader("📶 Strength Analysis")
     if lb_front.empty:
@@ -581,7 +702,7 @@ with tab_l:
         else:
             s_df = pd.DataFrame({"Strength": s_series, "WardName": lb_front["WardName"]}).dropna(subset=["Strength"])
             s_df["Strength"] = pd.Categorical(s_df["Strength"], categories=_STRENGTH_ORDER, ordered=True)
-            agg = (s_df.groupby("Strength", as_index=False)
+            agg = (s_df.groupby("Strength", observed=True, as_index=False)
                      .agg(Wards=("WardName", "count"),
                           Names=("WardName", lambda x: ", ".join(sorted(map(str, x.unique())))))
                      .sort_values("Strength"))
@@ -612,19 +733,30 @@ with tab_l:
         st.info("VoteBin or WardName not available for the selected front.")
     else:
         tmp = lb_front.copy()
-        tmp["Status"] = np.where(tmp.get("Rank", 0).astype("Int64") == 1, "Won", "Not won")
+        if "Rank" in tmp.columns:
+            rank_series = tmp["Rank"].astype("Int64")
+        else:
+            rank_series = pd.Series(pd.NA, index=tmp.index, dtype="Int64")
+        tmp["Status"] = np.where(rank_series.fillna(0) == 1, "Won", "Not won")
         bins = _vote_bin_order(tmp["VoteBin"].astype(str).unique().tolist())
         tmp["VoteBinStr"] = pd.Categorical(tmp["VoteBin"].astype(str), categories=bins, ordered=True)
-        grp = (tmp.groupby("VoteBinStr")
-                  .apply(lambda g: {
-                      "count": len(g),
-                      "names": [
-                          (str(n), "Won" if (rk == 1) else "Not won")
-                          for n, rk in zip(g["WardName"], g.get("Rank", pd.Series([None]*len(g))).astype("Int64"))
-                      ]
-                  })
-                  .reset_index(name="data")
-              )
+        group_cols = ["WardName"]
+        if "Rank" in tmp.columns:
+            group_cols.append("Rank")
+
+        def _summarize_vote_bin(g: pd.DataFrame) -> dict:
+            ranks = g["Rank"].astype("Int64") if "Rank" in g.columns else pd.Series(pd.NA, index=g.index, dtype="Int64")
+            names: list[tuple[str, str]] = []
+            for nm, rk in zip(g["WardName"], ranks):
+                status = "Won" if (pd.notna(rk) and rk == 1) else "Not won"
+                names.append((str(nm), status))
+            return {"count": int(len(g)), "names": names}
+
+        grp = (
+            tmp.groupby("VoteBinStr", observed=True)[group_cols]
+            .apply(_summarize_vote_bin)
+            .reset_index(name="data")
+        )
 
         won_col, lost_col = "#2e7d32", "#c62828"
         for _, row in grp.iterrows():
