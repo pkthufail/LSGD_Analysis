@@ -259,12 +259,27 @@ STRENGTH_COLOR_MAP = {
 WON_NAME_COLOR = "#2e7d32"
 NOT_WON_NAME_COLOR = "#c62828"
 
+
+def blend_hex(color_from: str, color_to: str, ratio: float) -> str:
+    ratio = max(0.0, min(1.0, float(ratio)))
+    def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+        return '#{:02x}{:02x}{:02x}'.format(*rgb)
+    c1 = _hex_to_rgb(color_from)
+    c2 = _hex_to_rgb(color_to)
+    blended = tuple(int(c1[i] + (c2[i] - c1[i]) * ratio) for i in range(3))
+    return _rgb_to_hex(blended)
+
+
 def style_strength_table(df_display: pd.DataFrame, band_col: str = "Strength Band") -> Styler:
     def _row_style(row: pd.Series):
         band = str(row.get(band_col, ""))
         color = STRENGTH_COLOR_MAP.get(band, DEFAULT_BG_COLOR)
         return [f"background-color: {color}"] * len(row)
     return df_display.style.apply(_row_style, axis=1)
+
 
 def format_vote_names(names: list[str], color: str) -> str:
     if not names:
@@ -273,6 +288,24 @@ def format_vote_names(names: list[str], color: str) -> str:
         f"<span style='color:{color};font-weight:600'>" + html.escape(name) + "</span>"
         for name in names
     )
+
+
+def style_lead_table(df_display: pd.DataFrame, value_col: str, positive: bool = True) -> Styler:
+    values = pd.to_numeric(df_display[value_col], errors='coerce')
+    max_val = values.replace([np.inf, -np.inf], np.nan).abs().max()
+    if not pd.notna(max_val) or max_val <= 0:
+        return df_display.style
+    target = '#2e7d32' if positive else '#c62828'
+    def _row_style(row: pd.Series):
+        value = pd.to_numeric(row.get(value_col), errors='coerce')
+        if not pd.notna(value):
+            return [f"background-color: {DEFAULT_BG_COLOR}"] * len(row)
+        ratio = min(abs(float(value)) / max_val, 1.0)
+        color = blend_hex('#ffffff', target, ratio)
+        return [f"background-color: {color}"] * len(row)
+    return df_display.style.apply(_row_style, axis=1)
+
+
 
 def _lead_to_strength(lead: float | int | None) -> str | None:
     if pd.isna(lead):
