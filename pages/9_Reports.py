@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 from lib.data import load_data, get_data_path, data_controls
-from lib.ui import render_styled_table
+from lib.ui import render_styled_table, render_color_legend
 from lib.colors import FRONT_BG_COLORS, DEFAULT_BG_COLOR
 
 
@@ -110,6 +110,8 @@ with tab_iuml:
 
     seats_styler = seats_xt.style.apply(lambda r: _highlight_if_others_gt_iuml(r, PARTIES_MUSLIM), axis=1)
     render_styled_table(seats_styler, fmt={p: "{:,.0f}" for p in PARTIES_MUSLIM})
+    # Legend for highlight
+    render_color_legend({"Highlight": "#FFF0F0"}, title="Color meaning: Others > IUML")
 
     st.divider()
     st.subheader("Votes by District (Ward-tier): IUML vs Others")
@@ -132,6 +134,71 @@ with tab_iuml:
 
     votes_styler = votes_xt.style.apply(lambda r: _highlight_if_others_gt_iuml(r, PARTIES_MUSLIM), axis=1)
     render_styled_table(votes_styler, fmt={p: "{:,.0f}" for p in PARTIES_MUSLIM})
+    render_color_legend({"Highlight": "#FFF0F0"}, title="Color meaning: Others > IUML")
+
+    st.divider()
+    st.subheader("IUML vs INC: District-wise Performance (Ward-tier)")
+    # Build district-wise contested, won, strike rate for IUML and INC at Ward tier
+    compare_parties = ["IUML", "INC"]
+    ward_pi = df_ward_all[df_ward_all["PartyUpper"].isin([p.upper() for p in compare_parties])].copy()
+    if ward_pi.empty:
+        st.info("No Ward-tier rows found for IUML/INC.")
+    else:
+        # Contested counts (number of ward candidates)
+        contested = (
+            ward_pi.groupby(["District", "PartyUpper"], dropna=False).size().rename("Contested").reset_index()
+        )
+
+        # Won counts (Rank == 1) if available
+        if "Rank" in ward_pi.columns:
+            winners = ward_pi[pd.to_numeric(ward_pi["Rank"], errors="coerce") == 1.0]
+            won = (
+                winners.groupby(["District", "PartyUpper"], dropna=False).size().rename("Won").reset_index()
+            )
+        else:
+            won = pd.DataFrame({"District": [], "PartyUpper": [], "Won": []})
+
+        stats = pd.merge(contested, won, on=["District", "PartyUpper"], how="left")
+        stats["Won"] = pd.to_numeric(stats["Won"], errors="coerce").fillna(0).astype(int)
+        stats["Contested"] = pd.to_numeric(stats["Contested"], errors="coerce").fillna(0).astype(int)
+        stats["Strike Rate (%)"] = np.where(stats["Contested"] > 0, stats["Won"] / stats["Contested"] * 100, 0.0)
+
+        def to_named_wide(df: pd.DataFrame, value_col: str, label: str) -> pd.DataFrame:
+            w = df.pivot_table(index="District", columns="PartyUpper", values=value_col, aggfunc="first")
+            for p in ["IUML", "INC"]:
+                if p not in w.columns:
+                    w[p] = 0
+            w = w[["IUML", "INC"]]
+            w.columns = [f"{p} {label}" for p in w.columns]
+            return w
+
+        wide_cont = to_named_wide(stats, "Contested", "Contested")
+        wide_won = to_named_wide(stats, "Won", "Won")
+        wide_sr = to_named_wide(stats, "Strike Rate (%)", "Strike Rate (%)")
+        perf = pd.concat([wide_cont, wide_won, wide_sr], axis=1).reset_index()
+
+        # All Kerala total row
+        tot_cont = stats.groupby("PartyUpper", dropna=False)["Contested"].sum()
+        tot_won = stats.groupby("PartyUpper", dropna=False)["Won"].sum()
+        all_row = {"District": "All Kerala"}
+        for p in ["IUML", "INC"]:
+            c = int(tot_cont.get(p, 0))
+            w = int(tot_won.get(p, 0))
+            all_row[f"{p} Contested"] = c
+            all_row[f"{p} Won"] = w
+            all_row[f"{p} Strike Rate (%)"] = (w / c * 100) if c > 0 else 0.0
+        perf = pd.concat([perf.sort_values("District"), pd.DataFrame([all_row])], ignore_index=True)
+
+        fmt = {
+            "IUML Contested": "{:,.0f}",
+            "IUML Won": "{:,.0f}",
+            "IUML Strike Rate (%)": "{:,.2f}%",
+            "INC Contested": "{:,.0f}",
+            "INC Won": "{:,.0f}",
+            "INC Strike Rate (%)": "{:,.2f}%",
+        }
+        render_styled_table(perf, fmt=fmt)
+        # Legend for columns isn't needed; add IUML/INC color cue if desired
 
     st.divider()
     st.subheader("Top Assemblies for IUML (Ward-tier)")
@@ -165,7 +232,8 @@ with tab_iuml:
         strong["UDF Votes"] = pd.to_numeric(strong.get("UDF Votes", 0), errors="coerce").fillna(0).astype(int)
         strong["IUML % of Total"] = np.where(strong["Total Votes"] > 0, strong["IUML Votes"] / strong["Total Votes"] * 100, 0.0)
         strong["IUML % of UDF"] = np.where(strong["UDF Votes"] > 0, strong["IUML Votes"] / strong["UDF Votes"] * 100, 0.0)
-        strong = strong.sort_values(["IUML Votes", assembly_col], ascending=[False, True]).head(50)
+        # Rank top assemblies by IUML % of Total (desc), then IUML Votes
+        strong = strong.sort_values(["IUML % of Total", "IUML Votes", assembly_col], ascending=[False, False, True]).head(50)
         strong = strong.rename(columns={assembly_col: "Assembly"})[
             ["Assembly", "IUML Votes", "Total Votes", "IUML % of Total", "UDF Votes", "IUML % of UDF"]
         ]
@@ -267,4 +335,3 @@ with tab_general:
         wide = wide.reset_index().rename(columns={assembly_col: "Assembly"})
         styler = wide.style.apply(_row_color_by_max_front, axis=1).format({c: "{:,.2f}%" for c in order_cols})
         render_styled_table(styler)
-

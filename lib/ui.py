@@ -37,3 +37,25 @@ def render_styled_table(obj, fmt: dict | None = None):
     )
     st.markdown(f"<div class='tbl-wrap'>{html}</div>", unsafe_allow_html=True)
 
+
+def render_color_legend(items: dict[str, str], title: str | None = None):
+    """Render a compact legend of color swatches.
+    items: mapping of label -> hex color (background)
+    """
+    if not items:
+        return
+    title_html = f"<div style='font-weight:600; margin-bottom:4px'>{title}</div>" if title else ""
+    swatches = []
+    for label, color in items.items():
+        color = str(color)
+        swatches.append(
+            f"<div style='display:flex; align-items:center; margin:2px 8px 2px 0'>"
+            f"  <span style='display:inline-block; width:14px; height:14px; border:1px solid #999; background:{color}; margin-right:6px'></span>"
+            f"  <span style='font-size:0.9rem'>{label}</span>"
+            f"</div>"
+        )
+    html = (
+        "<div class='legend-wrap' style='display:flex; flex-wrap:wrap; align-items:center; margin:6px 0 4px'>"
+        + "".join(swatches) + "</div>"
+    )
+    st.markdown(title_html + html, unsafe_allow_html=True)

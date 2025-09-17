@@ -7,6 +7,7 @@ import plotly.express as px
 
 from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, PARTY_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS
+from lib.ui import render_color_legend
 
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="District · LSGD Explorer", page_icon="🗳️", layout="wide")
@@ -108,6 +109,10 @@ if {"Front", "LBType"}.issubset(df_d_winners.columns):
 
     styled = style_rows_by_palette(table_front, key_col="Front", palette=FRONT_BG_COLORS)
     render_styled_table(styled)
+    # Legend for Front colors used in the table
+    present_fronts = [f for f in table_front.get("Front", []).astype(str).tolist()]
+    legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in present_fronts}
+    render_color_legend(legend_map, title="Front colors")
 else:
     st.info("Need columns `Front` and `LBType` for this table.")
 
@@ -133,29 +138,37 @@ else:
         # Crosstab Party × Rank -> counts per rank
         rank_xt = pd.crosstab(df_w["Party"], df_w["Rank"]).fillna(0).astype(int)
 
-        # Identify numeric rank columns and sort
-        rank_cols = [c for c in rank_xt.columns if isinstance(c, (int, np.integer))]
-        rank_cols_sorted = sorted(rank_cols)
+        # Rename numeric Rank columns to labels: 1->Won, 2->2nd, 3->3rd, ...
+        def _rank_to_label(v):
+            try:
+                n = int(v)
+            except Exception:
+                return v
+            if n == 1:
+                return "Won"
+            suf = "th"
+            if not 11 <= (n % 100) <= 13:
+                suf = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+            return f"{n}{suf}"
 
-        # Rename Rank 1 to 'Won' if present
-        if 1 in rank_xt.columns:
-            rank_xt = rank_xt.rename(columns={1: "Won"})
+        rank_numeric = sorted([int(c) for c in rank_xt.columns if isinstance(c, (int, float, np.integer, np.floating))])
+        rename_map = {c: _rank_to_label(c) for c in rank_xt.columns}
+        rank_xt = rank_xt.rename(columns=rename_map)
 
-        # Contested = sum across rank columns (incl. 'Won' if present)
-        contested_cols = (["Won"] if "Won" in rank_xt.columns else []) + [c for c in rank_cols_sorted if c != 1]
-        contested_cols = [c for c in contested_cols if c in rank_xt.columns]
-        rank_xt["Contested"] = rank_xt[contested_cols].sum(axis=1)
+        # Contested across all rank columns (after rename)
+        rank_label_cols = [_rank_to_label(n) for n in rank_numeric]
+        contested_cols = [c for c in rank_label_cols if c in rank_xt.columns]
+        rank_xt["Contested"] = rank_xt[contested_cols].sum(axis=1) if contested_cols else 0
 
-        # Hit Rate (%)
+        # Hit Rate (%) using 'Won' if present
         if "Won" in rank_xt.columns:
             rank_xt["Hit Rate (%)"] = np.where(rank_xt["Contested"] > 0, (rank_xt["Won"] / rank_xt["Contested"] * 100), 0.0)
         else:
             rank_xt["Hit Rate (%)"] = 0.0
 
-        # Final column order: Won, other ranks ascending, Contested, Hit Rate
-        other_ranks = [c for c in rank_cols_sorted if c != 1 and c in rank_xt.columns]
-        ordered_cols = (["Won"] if "Won" in rank_xt.columns else []) + other_ranks + ["Contested", "Hit Rate (%)"]
-        ordered_cols = [c for c in ordered_cols if c in rank_xt.columns]
+        # Final column order: Won, 2nd, 3rd, ..., Contested, Hit Rate
+        other_labels = [_rank_to_label(n) for n in rank_numeric if n != 1]
+        ordered_cols = (["Won"] if "Won" in rank_xt.columns else []) + [c for c in other_labels if c in rank_xt.columns] + ["Contested", "Hit Rate (%)"]
 
         # Sort rows by Won desc then Contested desc (if present)
         sort_cols = [c for c in ["Won", "Contested"] if c in rank_xt.columns]
@@ -174,6 +187,10 @@ else:
             percent_cols=["Hit Rate (%)"],
         )
         render_styled_table(styled_rp)
+        # Legend for Party row colors
+        present_parties = [str(p) for p in table_rank_party.get("Party", []).tolist()]
+        legend_map = {p: PARTY_BG_COLORS.get(p, DEFAULT_BG_COLOR) for p in present_parties}
+        render_color_legend(legend_map, title="Party colors")
 
 # =====================================================
 # 3) Prep Local Body winners (Ward tier) once
@@ -238,6 +255,10 @@ else:
             percent_cols=[],  # counts only
         )
         render_styled_table(styled_leaders)
+        # Legend for Front colors
+        present_fronts = [str(f) for f in lead_table.get("Front", []).tolist()]
+        legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in present_fronts}
+        render_color_legend(legend_map, title="Front colors")
         
 # --- Bar chart: local bodies led by front (labels; no gaps for zero fronts; hide empty 'Corporation') ---
 lead_long = lead_table.melt(

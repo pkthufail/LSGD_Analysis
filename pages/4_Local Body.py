@@ -6,6 +6,7 @@ import altair as alt
 
 from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS, PARTY_BG_COLORS
+from lib.ui import render_color_legend
 
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="Local Body · LSGD Explorer", page_icon="🏘️", layout="wide")
@@ -195,16 +196,29 @@ else:
         .sort_index(axis=1)  # ascending ranks
     )
 
-    # Rename Rank=1 to 'Won'
-    if 1 in rank_xt.columns:
-        rank_xt = rank_xt.rename(columns={1: "Won"})
+    # Rename numeric Rank columns to labels: 1->Won, 2->2nd, 3->3rd, ...
+    def _rank_to_label(v):
+        try:
+            n = int(v)
+        except Exception:
+            return v
+        if n == 1:
+            return "Won"
+        suf = "th"
+        if not 11 <= (n % 100) <= 13:
+            suf = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suf}"
 
-    # Total contested = sum across all rank columns
-    rank_xt["Contested"] = rank_xt.sum(axis=1)
+    rank_numeric = sorted([int(c) for c in rank_xt.columns if isinstance(c, (int, float, np.integer, np.floating))])
+    rank_xt = rank_xt.rename(columns={c: _rank_to_label(c) for c in rank_xt.columns})
 
-    # Column order: Won, then ranks 2..N, then Contested
-    other_ranks = [c for c in rank_xt.columns if isinstance(c, (int, np.integer)) and c != 1]
-    ordered_cols = (["Won"] if "Won" in rank_xt.columns else []) + other_ranks + ["Contested"]
+    # Total contested = sum across all rank columns (after rename)
+    rank_labels = [_rank_to_label(n) for n in rank_numeric]
+    present_cols = [c for c in rank_labels if c in rank_xt.columns]
+    rank_xt["Contested"] = rank_xt[present_cols].sum(axis=1) if present_cols else 0
+
+    # Column order: Won, then 2nd.., then Contested
+    ordered_cols = (["Won"] if "Won" in rank_xt.columns else []) + [c for c in rank_labels if c != "Won" and c in rank_xt.columns] + ["Contested"]
     perf_table = rank_xt[ordered_cols].reset_index().rename(columns={"Party": "Party"})
 
     # Sort rows by Won desc then Contested desc (if Won exists)
@@ -224,6 +238,10 @@ else:
     num_cols = [c for c in perf_table.columns if c != "Party"]
     styled_perf = perf_table.style.apply(_row_style_party_rank, axis=1).format({c: "{:,.0f}" for c in num_cols})
     render_styled_table(styled_perf)
+    # Legend for Party colors
+    present_parties = [str(p) for p in perf_table.get("Party", []).tolist() if p is not None]
+    legend_map = {p: PARTY_BG_COLORS.get(p, DEFAULT_BG_COLOR) for p in present_parties}
+    render_color_legend(legend_map, title="Party colors")
 
 
 # =====================================================

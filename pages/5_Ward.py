@@ -6,6 +6,7 @@ import altair as alt
 
 from lib.data import load_data, get_data_path, data_controls
 from lib.colors import PARTY_BG_COLORS, FRONT_COLORS, DEFAULT_BG_COLOR
+from lib.ui import render_color_legend
 
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="Ward · LSGD Explorer", page_icon="🗳️", layout="wide")
@@ -164,6 +165,9 @@ def _row_style_party(row: pd.Series):
 
 styled_tbl = tbl.style.apply(_row_style_party, axis=1)
 render_styled_table(styled_tbl, number_cols=["Votes"], percent_cols=["%"])
+# Legend for Party colors in table
+legend_map = {str(p): party_color(p) for p in tbl.get("Party", []).astype(str).tolist()}
+render_color_legend(legend_map, title="Party colors")
 
 # ---------------- Pie Chart: Votes by Party (party colors) ----------------
 st.subheader("🟢 Vote Share (Pie)")

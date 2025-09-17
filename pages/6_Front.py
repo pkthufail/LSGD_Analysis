@@ -7,6 +7,7 @@ import plotly.express as px
 
 from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, PARTY_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS
+from lib.ui import render_color_legend
 
 # ---- Safe Styler import (pandas-version friendly) ----
 try:
@@ -114,15 +115,29 @@ def table_lbtype_performance_front(scope_df: pd.DataFrame, front: str, include_b
     xt = pd.crosstab(d["LBType"], d["Rank"]).fillna(0).astype(int)
     xt = xt.reindex(base_rows, fill_value=0)
 
-    if 1 in xt.columns:
-        xt = xt.rename(columns={1: "Won"})
+    # Rename numeric rank columns to labels: 1->Won, 2->2nd, 3->3rd, ...
+    def _rank_to_label(v):
+        try:
+            n = int(v)
+        except Exception:
+            return v
+        if n == 1:
+            return "Won"
+        suf = "th"
+        if not 11 <= (n % 100) <= 13:
+            suf = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suf}"
 
-    rank_cols = [c for c in xt.columns if isinstance(c, (int, np.integer)) or c == "Won"]
-    xt["Contested"] = xt[rank_cols].sum(axis=1)
+    rank_numeric = sorted([int(c) for c in xt.columns if isinstance(c, (int, float, np.integer, np.floating))])
+    xt = xt.rename(columns={c: _rank_to_label(c) for c in xt.columns})
+
+    # Totals and strike rate after rename
+    rank_label_cols = [_rank_to_label(n) for n in rank_numeric]
+    present_cols = [c for c in rank_label_cols if c in xt.columns]
+    xt["Contested"] = xt[present_cols].sum(axis=1) if present_cols else 0
     xt["Strike Rate (%)"] = np.where(xt["Contested"] > 0, xt.get("Won", 0) / xt["Contested"] * 100, 0.0)
 
-    other_ranks = sorted([c for c in xt.columns if isinstance(c, (int, np.integer)) and c != 1])
-    col_order = (["Won"] if "Won" in xt.columns else []) + other_ranks + ["Contested", "Strike Rate (%)"]
+    col_order = (["Won"] if "Won" in xt.columns else []) + [c for c in rank_label_cols if c != "Won" and c in xt.columns] + ["Contested", "Strike Rate (%)"]
     xt = xt[col_order].reset_index()
     return xt
 
@@ -338,6 +353,8 @@ with tab_d:
             .format({**{c: "{:,.0f}" for c in fmt_nums}, "Strike Rate (%)": _fmt_sr})
         )
         render_styled_table(styled_perf)
+        # Legend for selected Front color
+        render_color_legend({sel_front: FRONT_BG_COLORS.get(sel_front, DEFAULT_BG_COLOR)}, title="Row color")
 
     # OPPONENT BREAKDOWN by FRONT — TABLE
     st.subheader(f"🤝 Opponent Breakdown — {sel_front} ({scope_label})")
@@ -421,16 +438,25 @@ with tab_a:
         else:
             df_p["Rank"] = pd.to_numeric(df_p["Rank"], errors="coerce").astype("Int64")
             ct = pd.crosstab(df_p["LBName"], df_p["Rank"]).fillna(0).astype(int)
-            all_ranks = sorted([c for c in ct.columns if isinstance(c, (int, np.integer))])
-            if 1 in ct.columns:
-                ct = ct.rename(columns={1: "Won"})
-            other_ranks = [r for r in all_ranks if r != 1 and r in ct.columns]
-            ordered_cols = (["Won"] if "Won" in ct.columns else []) + other_ranks
+            # Rename numeric rank columns to labels: 1->Won, 2->2nd, 3->3rd, ...
+            def _rank_to_label(v):
+                try:
+                    n = int(v)
+                except Exception:
+                    return v
+                if n == 1:
+                    return "Won"
+                suf = "th"
+                if not 11 <= (n % 100) <= 13:
+                    suf = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+                return f"{n}{suf}"
+            all_ranks = sorted([int(c) for c in ct.columns if isinstance(c, (int, float, np.integer, np.floating))])
+            ct = ct.rename(columns={c: _rank_to_label(c) for c in ct.columns})
+            ordered_cols = (["Won"] if "Won" in ct.columns else []) + [
+                _rank_to_label(r) for r in all_ranks if r != 1 and _rank_to_label(r) in ct.columns
+            ]
             ct["Contested"] = ct[ordered_cols].sum(axis=1) if ordered_cols else 0
-            if "Won" in ct.columns:
-                ct["Strike Rate (%)"] = np.where(ct["Contested"] > 0, ct["Won"] / ct["Contested"] * 100, 0.0)
-            else:
-                ct["Strike Rate (%)"] = 0.0
+            ct["Strike Rate (%)"] = np.where(ct["Contested"] > 0, ct.get("Won", 0) / ct["Contested"] * 100, 0.0)
             t2 = ct[ordered_cols + ["Contested", "Strike Rate (%)"]].reset_index()
 
             # TOTAL row
@@ -451,6 +477,7 @@ with tab_a:
                 .format({**{c: "{:,.0f}" for c in fmt_nums}, "Strike Rate (%)": _fmt_sr})
             )
             render_styled_table(styled_t2)
+            render_color_legend({sel_front: FRONT_BG_COLORS.get(sel_front, DEFAULT_BG_COLOR)}, title="Row color")
 
         # OPPONENT BREAKDOWN by FRONT — TABLE
         st.subheader(f"🤝 {sel_front} — Opponent Breakdown ({scope_label})")

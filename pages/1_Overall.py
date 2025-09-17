@@ -5,6 +5,7 @@ import numpy as np
 
 from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, PARTY_BG_COLORS, DEFAULT_BG_COLOR
+from lib.ui import render_color_legend
 
 # Safe Styler import for type hints across pandas versions
 try:
@@ -135,6 +136,9 @@ with tab1:
             percent_cols=[],
         )
         render_styled_table(styled_front)
+        if "Front" in front_table.columns:
+            legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in front_table["Front"].astype(str).tolist()}
+            render_color_legend(legend_map, title="Front colors")
     else:
         st.info("Need columns `Front` and `LBType` for this table.")
 
@@ -159,6 +163,9 @@ with tab1:
                     percent_cols=[],
                 )
                 render_styled_table(styled_party)
+                if "Party" in party_xt.columns:
+                    legend_map = {p: PARTY_BG_COLORS.get(p, DEFAULT_BG_COLOR) for p in party_xt["Party"].astype(str).tolist()}
+                    render_color_legend(legend_map, title="Party colors")
 
 # =====================================================
 # TAB 2: Vote Share (unchanged)
@@ -202,6 +209,9 @@ with tab2:
             percent_cols=["% Share"],
         )
         render_styled_table(styled_front_votes)
+        if "Front" in front_votes.columns:
+            legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in front_votes["Front"].astype(str).tolist()}
+            render_color_legend(legend_map, title="Front colors")
 
         # Collapsible: party-wise vote share per front
         for front in FRONT_ORDER:
@@ -232,3 +242,6 @@ with tab2:
                     percent_cols=["% Front Share", "% Total Share"],
                 )
                 render_styled_table(styled_party_votes)
+                if "Party" in party_votes.columns:
+                    legend_map = {p: PARTY_BG_COLORS.get(p, DEFAULT_BG_COLOR) for p in party_votes["Party"].astype(str).tolist()}
+                    render_color_legend(legend_map, title="Party colors")

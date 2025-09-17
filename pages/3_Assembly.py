@@ -1,14 +1,15 @@
-# pages/3_Assembly.py
+﻿# pages/3_Assembly.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 
 from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, DEFAULT_BG_COLOR
+from lib.ui import render_color_legend
 
 # ---------------- Page Config ----------------
-st.set_page_config(page_title="Assembly · LSGD Explorer", page_icon="🗳️", layout="wide")
-st.title("🏛️ Assembly View")
+st.set_page_config(page_title="Assembly Â· LSGD Explorer", page_icon="ðŸ—³ï¸", layout="wide")
+st.title("ðŸ›ï¸ Assembly View")
 
 # ---------------- Sidebar: Data controls ----------------
 data_controls()
@@ -86,9 +87,9 @@ df_da = df_d[df_d[assembly_col] == sel_assembly].copy()
 st.markdown("---")
 
 # =====================================================
-# 1) Front × LBType (Tier = Ward, Rank = 1) with Total
+# 1) Front Ã— LBType (Tier = Ward, Rank = 1) with Total
 # =====================================================
-st.subheader(f"🏆 Seats (Ward winners) by Front × LBType — {sel_assembly}")
+st.subheader(f"ðŸ† Seats (Ward winners) by Front Ã— LBType â€” {sel_assembly}")
 
 if "Rank" in df_da.columns:
     df_winners = df_da[(df_da["Tier"].astype(str).str.title() == "Ward") & (df_da["Rank"] == 1)].copy()
@@ -110,6 +111,11 @@ else:
 
     styled_t1 = _apply_number_formats(t1.style.apply(_row_style_front, axis=1), t1, percent_cols=[])
     render_styled_table(styled_t1)
+    # Legend: Front colors used in rows
+    present_fronts = [str(f) for f in t1.get("Front", []).tolist()] if 't1' in locals() else []
+    if present_fronts:
+        legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in present_fronts}
+        render_color_legend(legend_map, title="Front colors")
 
 # =====================================================
 # 2) Votes by Front per Local Body (Ward-tier)
@@ -117,7 +123,9 @@ else:
 #     Cols = LBName, LBType, UDF, LDF, NDA, OTH
 #     Row color = front with max votes/% or best (lowest) rank
 # =====================================================
-st.subheader(f"🗳️ Votes by Front in Local Bodies — {sel_assembly}")
+st.subheader(f"ðŸ—³ï¸ Votes by Front in Local Bodies â€” {sel_assembly}")
+st.caption("This table is moved to the bottom of the page.")
+"""
 
 df_votes = df_da[
     (df_da["Tier"].astype(str).str.title() == "Ward")
@@ -128,7 +136,7 @@ df_votes = df_da[
 if df_votes.empty:
     st.info("No Ward-tier vote rows available for this Assembly.")
 else:
-    # Pivot LB × Front (sum of votes)
+    # Pivot LB Ã— Front (sum of votes)
     pivot = (
         df_votes.groupby(["LBCode", "LBName", "LBType", "Front"], as_index=False)["Votes"].sum()
         .pivot(index=["LBCode", "LBName", "LBType"], columns="Front", values="Votes")
@@ -205,11 +213,117 @@ else:
 
     styled_t2 = t2_display.style.apply(_row_style_by_leader, axis=1)
     render_styled_table(styled_t2)
+    # Legend based on leader fronts present in rows
+    present_leaders = sorted(set([str(x) for x in leaders_series.tolist() if str(x) not in ("NONE", "TIE")]))
+    if present_leaders:
+        legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in present_leaders}
+        render_color_legend(legend_map, title="Leader (Front) colors")
+"""
+st.markdown("---")
+# =====================================================
+# 4) Votes by Front per Local Body (Ward-tier) â€” moved to bottom
+#     Rows = all LBs + summary rows [Total, Percentage, Rank]
+#     Cols = LBName, LBType, UDF, LDF, NDA, OTH
+#     Row color = front with max votes/% or best (lowest) rank
+# =====================================================
+st.subheader(f"ðŸ—³ï¸ Votes by Front in Local Bodies â€” {sel_assembly}")
+
+df_votes = df_da[
+    (df_da["Tier"].astype(str).str.title() == "Ward")
+    & df_da["Votes"].notna()
+    & df_da["LBType"].isin(["Grama", "Municipality", "Corporation"])
+].copy()
+
+if df_votes.empty:
+    st.info("No Ward-tier vote rows available for this Assembly.")
+else:
+    # Pivot LB Ã— Front (sum of votes)
+    pivot = (
+        df_votes.groupby(["LBCode", "LBName", "LBType", "Front"], as_index=False)["Votes"].sum()
+        .pivot(index=["LBCode", "LBName", "LBType"], columns="Front", values="Votes")
+        .fillna(0)
+        .reset_index()
+    )
+
+    # Ensure all Front columns exist
+    for fr in FRONT_ORDER:
+        if fr not in pivot.columns:
+            pivot[fr] = 0
+
+    # Keep needed cols and sort LBs
+    lb_rows = pivot[["LBName", "LBType"] + FRONT_ORDER].sort_values(["LBType", "LBName"]).reset_index(drop=True)
+
+    # --- Determine leader per LB row (for row coloring) ---
+    def _lb_leader(row: pd.Series):
+        vals = {fr: row.get(fr, 0) for fr in FRONT_ORDER}
+        maxv = max(vals.values()) if vals else 0
+        if maxv <= 0:
+            return "NONE"
+        winners = [fr for fr, v in vals.items() if v == maxv]
+        return winners[0] if len(winners) == 1 else "TIE"
+
+    lb_leaders = lb_rows.apply(_lb_leader, axis=1).tolist()
+
+    # Assembly totals / percentages / ranks (per front)
+    front_totals = {fr: int(lb_rows[fr].sum()) for fr in FRONT_ORDER}
+    grand_total = sum(front_totals.values())
+    front_percent = {fr: (front_totals[fr] / grand_total * 100) if grand_total > 0 else 0.0 for fr in FRONT_ORDER}
+    ranks_series = pd.Series(front_totals).rank(ascending=False, method="min").astype(int)
+    front_rank = {fr: int(ranks_series[fr]) for fr in FRONT_ORDER}
+
+    # --- Leaders for summary rows ---
+    def _winner_from_dict(d: dict, prefer_low: bool = False):
+        if not d:
+            return "NONE"
+        if prefer_low:
+            minv = min(d.values())
+            winners = [fr for fr, v in d.items() if v == minv]
+            return winners[0] if len(winners) == 1 else "TIE"
+        maxv = max(d.values())
+        if maxv <= 0:
+            return "NONE"
+        winners = [fr for fr, v in d.items() if v == maxv]
+        return winners[0] if len(winners) == 1 else "TIE"
+
+    leader_total = _winner_from_dict(front_totals, prefer_low=False)
+    leader_pct   = _winner_from_dict(front_percent, prefer_low=False)
+    leader_rank  = _winner_from_dict(front_rank, prefer_low=True)
+
+    # --- Build display table (values as strings with formatting) ---
+    lb_rows_fmt = lb_rows.copy()
+    for fr in FRONT_ORDER:
+        lb_rows_fmt[fr] = lb_rows_fmt[fr].map(lambda v: f"{int(v):,}")
+
+    summary_rows = [
+        {"LBName": "Total",      "LBType": "", **{fr: f"{front_totals[fr]:,}"     for fr in FRONT_ORDER}},
+        {"LBName": "Percentage", "LBType": "", **{fr: f"{front_percent[fr]:,.2f}%" for fr in FRONT_ORDER}},
+        {"LBName": "Rank",       "LBType": "", **{fr: f"{front_rank[fr]}"          for fr in FRONT_ORDER}},
+    ]
+    summary_df = pd.DataFrame(summary_rows)
+
+    t2_display = pd.concat([lb_rows_fmt, summary_df], ignore_index=True)
+
+    # Row-leader series aligned to display rows
+    leaders_series = pd.Series(lb_leaders + [leader_total, leader_pct, leader_rank], index=t2_display.index)
+
+    # --- Row coloring based on leader ---
+    def _row_style_by_leader(row: pd.Series):
+        leader = leaders_series.loc[row.name]
+        color = FRONT_BG_COLORS.get(leader, DEFAULT_BG_COLOR)
+        return [f"background-color: {color}"] * len(row)
+
+    styled_t2 = t2_display.style.apply(_row_style_by_leader, axis=1)
+    render_styled_table(styled_t2)
+    # Legend based on leader fronts present in rows
+    present_leaders = sorted(set([str(x) for x in leaders_series.tolist() if str(x) not in ("NONE", "TIE")]))
+    if present_leaders:
+        legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in present_leaders}
+        render_color_legend(legend_map, title="Leader (Front) colors")
 
 # =====================================================
-# 3) Local Body Seats (like District last table, no search) — Ward-tier winners
+# 3) Local Body Seats (like District last table, no search) â€” Ward-tier winners
 # =====================================================
-st.subheader(f"🏘️ Front-wise Seats Won in Local Body — {sel_assembly}")
+st.subheader(f"ðŸ˜ï¸ Front-wise Seats Won in Local Body â€” {sel_assembly}")
 
 mask_lb = (
     (df_da["Tier"].astype(str).str.title() == "Ward")
@@ -255,3 +369,7 @@ else:
         "UDF": "{:,.0f}", "LDF": "{:,.0f}", "NDA": "{:,.0f}", "OTH": "{:,.0f}"
     })
     render_styled_table(styled_lb)
+    present_leaders = [str(x) for x in lb_table.get("Leader", []).tolist()] if 'lb_table' in locals() else []
+    if present_leaders:
+        legend_map = {f: FRONT_BG_COLORS.get(f, DEFAULT_BG_COLOR) for f in present_leaders}
+        render_color_legend(legend_map, title="Leader (Front) colors")
