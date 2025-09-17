@@ -9,6 +9,11 @@ from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, PARTY_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS
 from lib.ui import render_color_legend
 
+try:
+    from pandas.io.formats.style import Styler
+except (ImportError, AttributeError):
+    from typing import Any as Styler
+
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="District · LSGD Explorer", page_icon="🗳️", layout="wide")
 st.title("🏙️ District View")
@@ -34,7 +39,7 @@ if missing:
 LBTYPE_ORDER = ["Grama", "Municipality", "Corporation", "Block", "District"]
 FRONT_ORDER = ["UDF", "LDF", "NDA", "OTH"]
 
-def _apply_number_formats(styler: pd.io.formats.style.Styler, df_display: pd.DataFrame, percent_cols: list[str]):
+def _apply_number_formats(styler: Styler, df_display: pd.DataFrame, percent_cols: list[str]):
     fmt_map = {}
     num_cols = df_display.select_dtypes(include=["number"]).columns.tolist()
     for c in num_cols:
@@ -57,7 +62,7 @@ def style_rows_by_palette(
     styler = _apply_number_formats(styler, df_display, percent_cols)
     return styler
 
-def render_styled_table(styler: pd.io.formats.style.Styler):
+def render_styled_table(styler: Styler):
     # hide index (handles pandas versions)
     try:
         styler = styler.hide(axis="index")
@@ -89,7 +94,7 @@ with c2:
 
 # ---------------- Filtered frames ----------------
 df_d = df[df["District"] == sel_district].copy()
-df_d_winners = df_d[df_d["Rank"] == 1] if "Rank" in df.columns else df_d.copy()
+df_d_winners = df_d[df_d["Rank"] == 1].copy() if "Rank" in df.columns else df_d.copy()
 
 # Consistent LBType order for winners table
 if "LBType" in df_d_winners.columns:

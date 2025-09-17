@@ -8,6 +8,11 @@ from lib.data import load_data, get_data_path, data_controls
 from lib.colors import FRONT_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS, PARTY_BG_COLORS
 from lib.ui import render_color_legend
 
+try:
+    from pandas.io.formats.style import Styler
+except (ImportError, AttributeError):
+    from typing import Any as Styler
+
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="Local Body · LSGD Explorer", page_icon="🏘️", layout="wide")
 st.title("🏘️ Local Body (Panchayath / Municipality / Corporation)")
@@ -27,7 +32,7 @@ if "Votes" in df.columns:
 df = df[df["Tier"].astype(str).str.title() == "Ward"].copy()
 
 # ---------------- Helpers ----------------
-def _apply_number_formats(styler: pd.io.formats.style.Styler, df_display: pd.DataFrame, percent_cols: list[str]):
+def _apply_number_formats(styler: Styler, df_display: pd.DataFrame, percent_cols: list[str]):
     fmt_map = {}
     for col in df_display.select_dtypes(include=["number"]).columns.tolist():
         fmt_map[col] = "{:,.2f}%" if col in percent_cols else "{:,.0f}"
@@ -45,7 +50,7 @@ def style_rows_by_palette(df_display: pd.DataFrame, key_col: str, palette: dict,
         styler = styler.hide_index()
     return styler
 
-def render_styled_table(styler: pd.io.formats.style.Styler):
+def render_styled_table(styler: Styler):
     # ALWAYS hide the index before rendering to HTML (fixes stray 0..N index)
     try:
         styler = styler.hide(axis="index")

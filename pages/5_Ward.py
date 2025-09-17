@@ -8,6 +8,14 @@ from lib.data import load_data, get_data_path, data_controls
 from lib.colors import PARTY_BG_COLORS, FRONT_COLORS, DEFAULT_BG_COLOR
 from lib.ui import render_color_legend
 
+try:
+    from pandas.io.formats.style import Styler as _PandasStyler
+except (ImportError, AttributeError):
+    _PandasStyler = None
+    from typing import Any as Styler
+else:
+    Styler = _PandasStyler
+
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="Ward · LSGD Explorer", page_icon="🗳️", layout="wide")
 st.title("🗳️ Ward View")
@@ -33,10 +41,13 @@ def render_styled_table(styler_or_df, number_cols=None, percent_cols=None):
     percent_cols = percent_cols or []
 
     # Accept either a DataFrame or an existing Styler
-    if isinstance(styler_or_df, pd.io.formats.style.Styler):
+    if _PandasStyler is not None and isinstance(styler_or_df, _PandasStyler):
         styler = styler_or_df
     else:
-        styler = styler_or_df.style
+        if hasattr(styler_or_df, 'style'):
+            styler = styler_or_df.style
+        else:
+            raise TypeError('Expected a pandas Styler or DataFrame-like object')
 
     # Number / percent formatting (safe even if some cols missing)
     fmt_map = {**{c: "{:,.0f}" for c in number_cols},

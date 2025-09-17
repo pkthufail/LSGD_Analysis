@@ -1,8 +1,22 @@
-import streamlit as st
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 import pandas as pd
+import streamlit as st
+
+try:
+    from pandas.io.formats.style import Styler as _PandasStyler
+except (ImportError, AttributeError):
+    _PandasStyler = None
+
+if TYPE_CHECKING:
+    from pandas.io.formats.style import Styler
+else:
+    Styler = Any
 
 
-def hide_index(styler: pd.io.formats.style.Styler) -> pd.io.formats.style.Styler:
+def hide_index(styler: "Styler") -> "Styler":
     """Hide index compatible across pandas versions."""
     try:
         return styler.hide(axis="index")
@@ -16,7 +30,12 @@ def render_styled_table(obj, fmt: dict | None = None):
     - obj: DataFrame or Styler
     - fmt: dict of {column: format_string}
     """
-    styler = obj if isinstance(obj, pd.io.formats.style.Styler) else obj.style
+    if _PandasStyler is not None and isinstance(obj, _PandasStyler):
+        styler = obj
+    elif hasattr(obj, "style"):
+        styler = obj.style
+    else:
+        raise TypeError("Expected a pandas Styler or DataFrame-like object")
     if fmt:
         styler = styler.format(fmt)
     styler = hide_index(styler)

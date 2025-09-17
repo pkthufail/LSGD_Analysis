@@ -62,7 +62,7 @@ def _hide_index(styler: Styler):
     except Exception:
         return styler.hide_index()
 
-def _apply_number_formats(styler: pd.io.formats.style.Styler, df_display: pd.DataFrame, percent_cols: list[str]):
+def _apply_number_formats(styler: Styler, df_display: pd.DataFrame, percent_cols: list[str]):
     fmt_map = {}
     num_cols = df_display.select_dtypes(include=["number"]).columns.tolist()
     for c in num_cols:
@@ -90,7 +90,7 @@ def style_rows_by_palette(
     styler = _apply_number_formats(styler, df_display, percent_cols)
     return _hide_index(styler)
 
-def render_styled_table(styler: pd.io.formats.style.Styler):
+def render_styled_table(styler: Styler):
     # Render as HTML so Streamlit doesn't re-add an index column; make responsive
     html = styler.to_html()
     st.markdown(

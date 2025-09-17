@@ -756,20 +756,31 @@ with tab_l:
         st.info("VoteBin or WardName not available for the selected party.")
     else:
         tmp = lb_party.copy()
-        tmp["Status"] = np.where(tmp.get("Rank", 0).astype("Int64") == 1, "Won", "Not won")
+        if "Rank" in tmp.columns:
+            rank_series = tmp["Rank"].astype("Int64")
+        else:
+            rank_series = pd.Series(pd.NA, index=tmp.index, dtype="Int64")
+        tmp["Status"] = np.where(rank_series.fillna(0) == 1, "Won", "Not won")
         # Prepare bin order
         bins = _vote_bin_order(tmp["VoteBin"].astype(str).unique().tolist())
         tmp["VoteBinStr"] = pd.Categorical(tmp["VoteBin"].astype(str), categories=bins, ordered=True)
-        grp = (tmp.groupby("VoteBinStr")
-                  .apply(lambda g: {
-                      "count": len(g),
-                      "names": [
-                          (str(n), "Won" if (rk == 1) else "Not won")
-                          for n, rk in zip(g["WardName"], g.get("Rank", pd.Series([None]*len(g))).astype("Int64"))
-                      ]
-                  })
-                  .reset_index(name="data")
-              )
+        group_cols = ["WardName"]
+        if "Rank" in tmp.columns:
+            group_cols.append("Rank")
+
+        def _summarize_vote_bin(g: pd.DataFrame) -> dict:
+            ranks = g["Rank"].astype("Int64") if "Rank" in g.columns else pd.Series(pd.NA, index=g.index, dtype="Int64")
+            names = []
+            for nm, rk in zip(g["WardName"], ranks):
+                status = "Won" if (pd.notna(rk) and rk == 1) else "Not won"
+                names.append((str(nm), status))
+            return {"count": int(len(g)), "names": names}
+
+        grp = (
+            tmp.groupby("VoteBinStr", observed=True)[group_cols]
+            .apply(_summarize_vote_bin)
+            .reset_index(name="data")
+        )
 
         won_col, lost_col = "#2e7d32", "#c62828"  # green/red for names
         for _, row in grp.iterrows():
