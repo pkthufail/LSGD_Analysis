@@ -307,6 +307,32 @@ def style_lead_table(df_display: pd.DataFrame, value_col: str, positive: bool = 
 
 
 
+
+def style_share_margin_table(df_display: pd.DataFrame, share_col: str, threshold: float = 50.0, stronger: bool = True) -> Styler:
+    values = pd.to_numeric(df_display.get(share_col), errors="coerce")
+    if values.dropna().empty:
+        return df_display.style
+    deltas = (values - threshold) if stronger else (threshold - values)
+    deltas = deltas.where(deltas > 0, 0)
+    max_val = deltas.replace([np.inf, -np.inf], np.nan).max()
+    if not pd.notna(max_val) or max_val <= 0:
+        return df_display.style
+    target = "#2e7d32" if stronger else "#c62828"
+
+    def _row_style(row: pd.Series):
+        value = pd.to_numeric(row.get(share_col), errors="coerce")
+        if not pd.notna(value):
+            return [f"background-color: {DEFAULT_BG_COLOR}"] * len(row)
+        delta = (value - threshold) if stronger else (threshold - value)
+        if delta <= 0:
+            return [f"background-color: {DEFAULT_BG_COLOR}"] * len(row)
+        ratio = min(float(delta) / max_val, 1.0)
+        color = blend_hex("#ffffff", target, ratio)
+        return [f"background-color: {color}"] * len(row)
+
+    return df_display.style.apply(_row_style, axis=1)
+
+
 def _lead_to_strength(lead: float | int | None) -> str | None:
     if pd.isna(lead):
         return None
@@ -691,6 +717,77 @@ with tab_a:
         else:
             st.plotly_chart(fig_vote_a, use_container_width=True)
 
+        if asm_ward.empty or "Votes" not in asm_ward.columns:
+            st.info("No ward-level vote data available for this assembly.")
+        else:
+            front_contested = asm_ward[asm_ward["Front"] == sel_front].copy()
+            if front_contested.empty:
+                st.info(f"{sel_front} did not contest any wards in this assembly.")
+            else:
+                key_cols = _ward_join_keys(asm_ward) or ["WardName"]
+                total_by_ward = asm_ward.groupby(key_cols)["Votes"].sum().rename("Total Votes")
+                front_by_ward = front_contested.groupby(key_cols)["Votes"].sum().rename("Front Votes")
+                ward_summary = front_by_ward.to_frame().join(total_by_ward, how="left")
+                ward_summary = ward_summary[ward_summary["Total Votes"] > 0]
+                if ward_summary.empty:
+                    st.info("No ward-level totals available to compute vote shares.")
+                else:
+                    summary = ward_summary.reset_index()
+                    meta_candidates = [c for c in ["LBName", "WardName", "WardNo", "WardCode"] if c in asm_ward.columns]
+                    extra_cols = [c for c in meta_candidates if c not in summary.columns]
+                    if extra_cols:
+                        meta_df = asm_ward[[*key_cols, *extra_cols]].drop_duplicates(key_cols)
+                        summary = summary.merge(meta_df, on=key_cols, how="left")
+                    summary["Front Votes"] = summary["Front Votes"].astype(int)
+                    summary["Total Votes"] = summary["Total Votes"].astype(int)
+                    summary["Share (%)"] = np.where(
+                        summary["Total Votes"] > 0,
+                        summary["Front Votes"] / summary["Total Votes"] * 100,
+                        0.0,
+                    )
+                    column_order = []
+                    for col in ["LBName", "WardName", "WardNo", "WardCode"]:
+                        if col in summary.columns:
+                            column_order.append(col)
+                    column_order += ["Front Votes", "Total Votes", "Share (%)"]
+                    column_order = list(dict.fromkeys(column_order))
+                    strongest = summary[summary["Share (%)"] > 50].sort_values(
+                        ["Share (%)", "Front Votes"], ascending=[False, False]
+                    ).head(20)
+                    weakest = summary[summary["Share (%)"] < 50].sort_values(
+                        ["Share (%)", "Front Votes"], ascending=[True, False]
+                    ).head(20)
+
+                    def _render_ward_list(frame: pd.DataFrame, title: str, empty_message: str, stronger: bool) -> None:
+                        st.subheader(title)
+                        if frame.empty:
+                            st.info(empty_message)
+                            return
+                        table = frame[column_order].copy()
+                        for col in ["Front Votes", "Total Votes"]:
+                            if col in table.columns:
+                                table[col] = table[col].astype(int)
+                        fmt_nums = [c for c in ["Front Votes", "Total Votes"] if c in table.columns]
+                        if "Share (%)" in table.columns:
+                            styled_table = style_share_margin_table(table, "Share (%)", stronger=stronger)
+                        else:
+                            styled_table = table.style
+                        render_styled_table(styled_table, fmt_numbers=fmt_nums, fmt_perc=["Share (%)"])
+
+                    _render_ward_list(
+                        strongest,
+                        f"{sel_front} - Strongest Wards ({scope_label})",
+                        f"No wards where {sel_front} crossed 50% vote share in this assembly.",
+                        True,
+                    )
+                    _render_ward_list(
+                        weakest,
+                        f"{sel_front} - Weakest Wards ({scope_label})",
+                        f"No wards where {sel_front} fell below 50% vote share in this assembly.",
+                        False,
+                    )
+
+
 # ---------- Local Body Tab ----------
 with tab_l:
     st.markdown("#### Scope")
@@ -868,7 +965,7 @@ with tab_l:
         render_styled_table(styled_opp_l)
 
     # ===== WINNING CANDIDATES (details) =====
-    st.subheader("🏅 Winning Candidates (Selected Front)")
+    st.subheader(f"🏅 Winning Candidates - {sel_front}")
     if lb_ward.empty or "Rank" not in lb_ward.columns:
         st.info("No Rank data available.")
     else:
@@ -901,7 +998,7 @@ with tab_l:
                 "Trailing Candidate": w.get("Trailing Candidate", pd.Series(index=w.index, dtype=str)).fillna("-"),
             }).sort_values("Ward name").reset_index(drop=True)
 
-            styled_win = color_rows_uniform_front(winners_tbl, sel_front).format({
+            styled_win = style_lead_table(winners_tbl, "Lead", positive=True).format({
                 "Votes": "{:,.0f}",
                 "Lead": "{:,.0f}",
                 "Vote share (%)": "{:,.2f}%"
@@ -909,7 +1006,7 @@ with tab_l:
             render_styled_table(styled_win)
 
     # ===== LOSING CANDIDATES (details) =====
-    st.subheader("📉 Losing Candidates (Selected Front)")
+    st.subheader(f"📉 Losing Candidates - {sel_front}")
     if lb_ward.empty or "Rank" not in lb_ward.columns:
         st.info("No Rank data available.")
     else:
@@ -939,7 +1036,7 @@ with tab_l:
                 "Winning Candidate": L.get("Winning Candidate", pd.Series(index=L.index, dtype=str)).fillna("-"),
             }).sort_values("Ward name").reset_index(drop=True)
 
-            styled_lose = color_rows_uniform_front(losers_tbl, sel_front).format({
+            styled_lose = style_lead_table(losers_tbl, "Trail", positive=False).format({
                 "Votes": "{:,.0f}",
                 "Trail": "{:,.0f}",
                 "Vote share (%)": "{:,.2f}%"
