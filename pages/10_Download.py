@@ -1,5 +1,6 @@
 import io
 import re
+import html
 from datetime import datetime
 from typing import List, Optional, Sequence, Tuple
 
@@ -17,7 +18,7 @@ except ModuleNotFoundError:
     HAS_REPORTLAB = False
 
 from lib.colors import DEFAULT_BG_COLOR, FRONT_BG_COLORS, PARTY_BG_COLORS, FRONT_COLORS, PARTY_COLORS
-from lib.data import data_controls, get_data_path, load_data
+from lib.data import data_controls, get_data_path, load_data, load_wards_2025, lb_ward_count_lookup
 
 FRONT_ORDER = ["UDF", "LDF", "NDA", "OTH"]
 FRONT_ORDER_MAP = {front: idx for idx, front in enumerate(FRONT_ORDER)}
@@ -47,6 +48,10 @@ STRENGTH_COLOR_MAP = {
     "200-499": "#a3e8c4",
     "500+": "#8bdcb3",
 }
+WINNING_WARD_COLOR = "#2e7d32"
+LOSING_WARD_COLOR = "#c62828"
+
+LB_WARD_COUNTS: dict[str, dict[str, int]] = {}
 
 
 def _safe_filename(text: str) -> str:
@@ -159,6 +164,14 @@ def _resolve_ward_label(series_df: pd.DataFrame) -> pd.Series:
             return series_df[col].astype(str)
     return pd.Series("-", index=series_df.index)
 
+
+def _format_name_list(names: list[str], color: str) -> str:
+    cleaned = [str(name).strip() for name in names if str(name).strip()]
+    if not cleaned:
+        return '-'
+    tagged = [f'<font color="{color}">{html.escape(name)}</font>' for name in cleaned]
+    return ', '.join(tagged)
+
 def _build_strength_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Strength Band", "Ward Count", "Ward Names"])
@@ -211,13 +224,14 @@ def _build_strength_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
         return pd.DataFrame(columns=["Strength Band", "Ward Count", "Ward Names"])
     return agg.reset_index(drop=True)
 
+
 def _build_votebin_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
     if df.empty or "VoteBin" not in df.columns:
-        return pd.DataFrame(columns=["VoteBin", "Won", "Not Won", "Total", "Won Wards", "Not Won Wards"])
+        return pd.DataFrame(columns=["VoteBin", "Won", "Not Won", "Total", "Winning Wards", "Losing Wards"])
 
     part = df[df["Party"].astype(str) == sel_party].copy()
     if part.empty:
-        return pd.DataFrame(columns=["VoteBin", "Won", "Not Won", "Total", "Won Wards", "Not Won Wards"])
+        return pd.DataFrame(columns=["VoteBin", "Won", "Not Won", "Total", "Winning Wards", "Losing Wards"])
 
     part["VoteBin"] = part["VoteBin"].astype(str)
     part["Rank"] = pd.to_numeric(part.get("Rank"), errors="coerce")
@@ -238,20 +252,19 @@ def _build_votebin_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
     pivot["Total"] = pivot[["Won", "Not Won"]].sum(axis=1)
     table = pivot.reset_index().sort_values("VoteBin").reset_index(drop=True)
 
-    names = (
-        part.groupby(["VoteBin", "Status"], dropna=False)["_WardLabel"]
-        .apply(
-            lambda x: ", ".join(
-                sorted({str(v).strip() for v in x if pd.notna(v) and str(v).strip()})
-            )
-            or "-"
+    def _collect(status: str) -> dict[str, list[str]]:
+        subset = part[part["Status"] == status]
+        grouped = (
+            subset.groupby("VoteBin", dropna=False)["_WardLabel"]
+            .apply(lambda x: sorted({str(v).strip() for v in x if str(v).strip()}))
         )
-        .unstack(fill_value="-")
-    )
-    names = names.reindex(table["VoteBin"], fill_value="-")
-    table["Won Wards"] = names.get("Won", pd.Series("-", index=table.index)).astype(str)
-    table["Not Won Wards"] = names.get("Not Won", pd.Series("-", index=table.index)).astype(str)
+        return {str(k): (list(v) if isinstance(v, (list, tuple)) else [str(v)]) for k, v in grouped.items()}
 
+    winning = _collect("Won")
+    losing = _collect("Not Won")
+    table["Winning Wards"] = table["VoteBin"].map(lambda vb: _format_name_list(winning.get(str(vb), []), WINNING_WARD_COLOR))
+    table["Losing Wards"] = table["VoteBin"].map(lambda vb: _format_name_list(losing.get(str(vb), []), LOSING_WARD_COLOR))
+    table = table[["VoteBin", "Won", "Not Won", "Total", "Winning Wards", "Losing Wards"]]
     return table
 
 
@@ -483,6 +496,13 @@ def _build_summary_lines(df: pd.DataFrame, sel_front: str, sel_party: str) -> Li
     )
     lines.append(f"Won {won} seats out of {contested} contested.")
     lines.append(f"Total seats: {total_seats:,} | Majority mark: {majority_mark:,}")
+    lb_code_series = df.get("LBCode")
+    if lb_code_series is not None:
+        lb_values = lb_code_series.dropna().astype(str).unique()
+        if len(lb_values) == 1:
+            counts_info = LB_WARD_COUNTS.get(lb_values[0])
+            if counts_info:
+                lines.append(f"No of Wards in 2025: {counts_info['wards_2025']:,} | No of New Wards: {counts_info['new_wards']:,}")
     return lines
 
 
@@ -726,6 +746,9 @@ def main() -> None:
 
     data_controls()
     df = load_data(get_data_path()).copy()
+    global LB_WARD_COUNTS
+    wards_2025_df = load_wards_2025()
+    LB_WARD_COUNTS = lb_ward_count_lookup(df, wards_2025_df)
     df["TierNorm"] = df.get("TierNorm", df.get("Tier", "")).astype(str).str.title()
 
     fronts_present = [f for f in FRONT_ORDER if f in df.get("Front", pd.Series(dtype=str)).astype(str).unique().tolist()]

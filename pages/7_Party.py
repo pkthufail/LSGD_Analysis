@@ -6,7 +6,7 @@ import re
 import plotly.express as px
 import html
 
-from lib.data import load_data, get_data_path, data_controls
+from lib.data import load_data, get_data_path, data_controls, load_wards_2025, lb_ward_count_lookup
 from lib.colors import FRONT_BG_COLORS, PARTY_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS
 from lib.ui import render_color_legend
 
@@ -39,6 +39,9 @@ if "Tier" in df.columns:
 LBTYPE_ORDER = ["Grama", "Municipality", "Corporation", "Block", "District"]
 FRONT_ORDER  = ["UDF", "LDF", "NDA", "OTH"]
 TIERS_ORDER  = ["Ward", "Block", "District"]
+
+wards_2025_df = load_wards_2025()
+LB_WARD_COUNTS = lb_ward_count_lookup(df, wards_2025_df)
 
 # ---------------- Helpers ----------------
 def _fmt_sr(v):
@@ -824,6 +827,12 @@ with tab_l:
 
     # =============== SUMMARY ===============
     st.subheader(f"🧮 Summary — {sel_party} in {scope_label}")
+    lb_code_series = lb_ward.get("LBCode", pd.Series(dtype=str))
+    if lb_code_series is not None and not lb_code_series.dropna().empty:
+        lb_code_val = lb_code_series.dropna().astype(str).unique()[0]
+        counts_info = LB_WARD_COUNTS.get(lb_code_val)
+        if counts_info:
+            st.markdown(f"**Ward counts:** 2020 - {counts_info['wards_2020']:,} | 2025 - {counts_info['wards_2025']:,} | New wards - {counts_info['new_wards']:,}")
     if lb_ward.empty:
         st.info("No Ward-tier data for this local body.")
     else:

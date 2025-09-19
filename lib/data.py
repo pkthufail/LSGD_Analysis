@@ -151,3 +151,72 @@ def data_controls():
         if st.button("Reload data"):
             load_data.clear()
             st.toast("Data cache cleared. It will reload on next access.")
+
+
+@st.cache_data(show_spinner=False, ttl=300)
+def load_wards_2025(path: Optional[Union[str, Path]] = None) -> pd.DataFrame:
+    """Load ward master for 2025 elections if available."""
+    candidates: list[Path] = []
+    if path is not None:
+        candidates.append(Path(path))
+    candidates.extend([
+        Path('Wards_2025.csv'),
+        Path.cwd() / 'Wards_2025.csv',
+        _repo_root() / 'Wards_2025.csv',
+    ])
+    seen: set[str] = set()
+    for cand in candidates:
+        cand_path = Path(cand)
+        key = str(cand_path.resolve()) if cand_path.exists() else str(cand_path)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            if cand_path.exists():
+                df = pd.read_csv(cand_path, dtype=str, low_memory=False)
+                for col in ['LBCode', 'WardCode']:
+                    if col in df.columns:
+                        df[col] = df[col].astype(str).str.strip()
+                return df
+        except Exception:
+            continue
+    return pd.DataFrame(columns=['District', 'LBCode', 'LBName', 'WardCode'])
+
+
+def lb_ward_count_lookup(df: pd.DataFrame, wards_2025: Optional[pd.DataFrame] = None) -> dict[str, dict[str, int]]:
+    """Return ward counts for each LBCode for 2020 dataset and 2025 master."""
+    if wards_2025 is None:
+        wards_2025 = load_wards_2025()
+
+    base = df.copy()
+    if 'LBCode' not in base.columns or 'WardCode' not in base.columns:
+        counts_2020 = pd.Series(dtype='int64')
+    else:
+        tier_col = 'TierNorm' if 'TierNorm' in base.columns else ('Tier' if 'Tier' in base.columns else None)
+        if tier_col is not None:
+            base = base[base[tier_col].astype(str).str.title() == 'Ward']
+        base['LBCode'] = base['LBCode'].astype(str).str.strip()
+        base['WardCode'] = base['WardCode'].astype(str).str.strip()
+        counts_2020 = base.groupby('LBCode', dropna=True)['WardCode'].nunique()
+        counts_2020.index = counts_2020.index.astype(str)
+
+    if wards_2025 is None or wards_2025.empty or 'LBCode' not in wards_2025.columns or 'WardCode' not in wards_2025.columns:
+        counts_2025 = pd.Series(dtype='int64')
+    else:
+        w25 = wards_2025.copy()
+        w25['LBCode'] = w25['LBCode'].astype(str).str.strip()
+        w25['WardCode'] = w25['WardCode'].astype(str).str.strip()
+        counts_2025 = w25.groupby('LBCode', dropna=True)['WardCode'].nunique()
+        counts_2025.index = counts_2025.index.astype(str)
+
+    lb_codes = sorted(set(counts_2020.index.tolist()) | set(counts_2025.index.tolist()))
+    lookup: dict[str, dict[str, int]] = {}
+    for lb_code in lb_codes:
+        wards_20 = int(counts_2020.get(lb_code, 0))
+        wards_25 = int(counts_2025.get(lb_code, 0))
+        lookup[lb_code] = {
+            'wards_2020': wards_20,
+            'wards_2025': wards_25,
+            'new_wards': max(wards_25 - wards_20, 0),
+        }
+    return lookup

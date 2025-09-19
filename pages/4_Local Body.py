@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-from lib.data import load_data, get_data_path, data_controls
+from lib.data import load_data, get_data_path, data_controls, load_wards_2025, lb_ward_count_lookup
 from lib.colors import FRONT_BG_COLORS, DEFAULT_BG_COLOR, FRONT_COLORS, PARTY_BG_COLORS
 from lib.ui import render_color_legend
 
@@ -30,6 +30,9 @@ if "Votes" in df.columns:
 
 # Scope to Ward tier only
 df = df[df["Tier"].astype(str).str.title() == "Ward"].copy()
+
+wards_2025_df = load_wards_2025()
+LB_WARD_COUNTS = lb_ward_count_lookup(df, wards_2025_df)
 
 # ---------------- Helpers ----------------
 def _apply_number_formats(styler: Styler, df_display: pd.DataFrame, percent_cols: list[str]):
@@ -92,6 +95,20 @@ df_winners = df_lb_all[df_lb_all["Rank"] == 1].copy() if "Rank" in df_lb_all.col
 
 # ===== Summary lines (colored) =====
 st.markdown("### Summary")
+
+# Ward counts (2020 vs 2025)
+lb_code_series = df_lb_all.get("LBCode", pd.Series(dtype=str))
+ward_count_line = ""
+if lb_code_series is not None and not lb_code_series.dropna().empty:
+    lb_code_value = lb_code_series.dropna().astype(str).unique()[0]
+    counts_info = LB_WARD_COUNTS.get(lb_code_value)
+    if counts_info:
+        ward_count_line = (
+            f"**Ward counts:** 2020 - {counts_info['wards_2020']:,} | "
+            f"2025 - {counts_info['wards_2025']:,} | New wards - {counts_info['new_wards']:,}"
+        )
+        st.markdown(ward_count_line)
+
 FRONT_ORDER = ["UDF", "LDF", "NDA", "OTH"]
 
 party_specific = {
