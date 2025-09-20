@@ -1,5 +1,6 @@
 import io
 import re
+
 import html
 from datetime import datetime
 from typing import List, Optional, Sequence, Tuple
@@ -9,16 +10,36 @@ import pandas as pd
 import streamlit as st
 
 try:
+    import plotly.io as pio
+except ModuleNotFoundError:
+    pio = None
+
+try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image
     HAS_REPORTLAB = True
 except ModuleNotFoundError:
     HAS_REPORTLAB = False
 
 from lib.colors import DEFAULT_BG_COLOR, FRONT_BG_COLORS, PARTY_BG_COLORS, FRONT_COLORS, PARTY_COLORS
 from lib.data import data_controls, get_data_path, load_data, load_wards_2025, lb_ward_count_lookup
+from lib.report_assembly import (
+    summary_by_lb,
+    front_performance,
+    party_performance,
+    seats_by_front,
+    votes_by_front,
+    party_lb_performance,
+    opponent_breakdown,
+    strength_table,
+    vote_share_strength,
+    strongest_wards,
+    weakest_wards,
+    strength_chart,
+    vote_bin_chart
+)
 
 FRONT_ORDER = ["UDF", "LDF", "NDA", "OTH"]
 FRONT_ORDER_MAP = {front: idx for idx, front in enumerate(FRONT_ORDER)}
@@ -52,6 +73,362 @@ WINNING_WARD_COLOR = "#2e7d32"
 LOSING_WARD_COLOR = "#c62828"
 
 LB_WARD_COUNTS: dict[str, dict[str, int]] = {}
+
+MAX_CELL_TEXT_CHARS = 160
+MAX_OTHER_POSITION_ITEMS = 6
+LONG_TEXT_COLUMNS = {
+    "WardNames {LBName in Bold: (Name of Wards from each LB in bracket)}",
+    "Ward Names",
+    "Winning Wards",
+    "Losing Wards",
+    "Other Positions",
+}
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+
+
+HAS_KALEIDO: Optional[bool] = None
+
+def _ensure_kaleido() -> bool:
+    global HAS_KALEIDO
+    if HAS_KALEIDO is None:
+        try:
+            import kaleido  # noqa: F401
+            HAS_KALEIDO = True
+        except ModuleNotFoundError:
+            HAS_KALEIDO = False
+    return bool(HAS_KALEIDO)
+
+
+def _figure_to_image(fig, width: int = 900, height: int = 480, scale: int = 2) -> Optional[bytes]:
+    if fig is None or pio is None:
+        return None
+    if not _ensure_kaleido():
+        return None
+    try:
+        return pio.to_image(fig, format="png", width=width, height=height, scale=scale, engine="kaleido")
+    except Exception as exc:
+        if "kaleido" in str(exc).lower():
+            global HAS_KALEIDO
+            HAS_KALEIDO = False
+        return None
+
+
+def _is_ordinal_column(name: object) -> bool:
+    if not isinstance(name, str):
+        return False
+    value = name.strip()
+    if value.lower() == "won":
+        return False
+    for suffix in ("st", "nd", "rd", "th"):
+        if value.endswith(suffix) and value[:-len(suffix)].isdigit():
+            return True
+    return False
+
+
+def _rank_label_to_int(label: object) -> Optional[int]:
+    if label is None:
+        return None
+    text = str(label).strip()
+    if not text:
+        return None
+    if text.lower() == "won":
+        return 1
+    match = re.match(r"^(\d+)(st|nd|rd|th)$", text.lower())
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _rank_column_order(df: pd.DataFrame, base_cols: Sequence[str]) -> List[str]:
+    order: List[str] = []
+    base_list = [col for col in base_cols if col in df.columns]
+    order.extend(base_list)
+    rank_pairs: List[tuple[int, str]] = []
+    for col in df.columns:
+        pos = _rank_label_to_int(col)
+        if pos is not None:
+            rank_pairs.append((pos, str(col)))
+    for _, col in sorted(rank_pairs, key=lambda item: item[0]):
+        if col not in order and col in df.columns:
+            order.append(col)
+    for col in df.columns:
+        if col not in order:
+            order.append(col)
+    return order
+
+
+def _reshape_position_columns(df: pd.DataFrame, base_cols: Sequence[str]) -> pd.DataFrame:
+    result = df.copy()
+    rank_to_col: Dict[int, List[str]] = {}
+    for col in result.columns:
+        pos = _rank_label_to_int(col)
+        if pos is not None:
+            rank_to_col.setdefault(pos, []).append(col)
+    other_cols: List[str] = []
+    for pos, cols in rank_to_col.items():
+        if pos and pos > 3:
+            other_cols.extend(cols)
+    if other_cols:
+        result[other_cols] = result[other_cols].apply(pd.to_numeric, errors='coerce').fillna(0).astype(int)
+        result['Other Positions'] = result[other_cols].sum(axis=1).astype(int)
+        result = result.drop(columns=other_cols, errors='ignore')
+    ordered: List[str] = []
+    ordered.extend([col for col in base_cols if col in result.columns])
+    for label in ['Won', '2nd', '3rd', 'Other Positions']:
+        if label in result.columns and label not in ordered:
+            ordered.append(label)
+    for col in result.columns:
+        if col not in ordered:
+            ordered.append(col)
+    return result[ordered]
+
+
+def _summarize_other_positions(row: pd.Series, columns: Sequence[str]) -> str:
+    entries: List[tuple[str, int]] = []
+    for col in columns:
+        value = row.get(col, 0)
+        if pd.isna(value):
+            continue
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            continue
+        if count <= 0:
+            continue
+        entries.append((str(col), count))
+    if not entries:
+        return '-'
+    if len(entries) > MAX_OTHER_POSITION_ITEMS:
+        kept = entries[:MAX_OTHER_POSITION_ITEMS - 1]
+        remainder = entries[MAX_OTHER_POSITION_ITEMS - 1:]
+        others_total = sum(count for _, count in remainder)
+        entries = kept + [("Others", others_total)]
+    parts = [f"{label}: {count}" for label, count in entries]
+    return ", ".join(parts)
+
+
+def _collapse_rank_columns(table: pd.DataFrame, base_cols: Sequence[str]) -> pd.DataFrame:
+    df = table.copy()
+    ordinal_cols = [col for col in df.columns if _is_ordinal_column(col)]
+    other_cols = [col for col in ordinal_cols if str(col).strip().lower() != "won"]
+    if other_cols:
+        df["Other Positions"] = df.apply(lambda row: _summarize_other_positions(row, other_cols), axis=1)
+        df = df.drop(columns=other_cols, errors="ignore")
+    else:
+        df["Other Positions"] = "0"
+    if "Other Positions" in df.columns:
+        df["Other Positions"] = df["Other Positions"].replace({"0": "-"})
+    ordered_cols: List[str] = list(base_cols)
+    if "Won" in df.columns and "Won" not in ordered_cols:
+        ordered_cols.append("Won")
+    if "Other Positions" in df.columns and "Other Positions" not in ordered_cols:
+        ordered_cols.append("Other Positions")
+    trailing = ["Contested", "Votes", "Vote share (%)", "Vote Share (%)", "Strike Rate (%)"]
+    for col in trailing:
+        if col in df.columns and col not in ordered_cols:
+            ordered_cols.append(col)
+    for col in df.columns:
+        if col not in ordered_cols:
+            ordered_cols.append(col)
+    df = df[ordered_cols]
+    return df
+
+
+def _append_table_section(
+    sections: List[Tuple],
+    title: str,
+    table: Optional[pd.DataFrame],
+    row_colors: Optional[List[str]] = None,
+    *,
+    rename_map: Optional[dict[str, str]] = None,
+    reorder: Optional[Sequence[str]] = None,
+    collapse_ranks: bool = False,
+    base_cols: Optional[Sequence[str]] = None,
+) -> None:
+    if table is None or table.empty:
+        return
+    df = table.copy()
+    if rename_map:
+        df = df.rename(columns=rename_map)
+    if collapse_ranks and base_cols:
+        df = _collapse_rank_columns(df, base_cols)
+    df = df.reset_index(drop=True)
+    if reorder:
+        df = df[[col for col in reorder if col in df.columns]]
+    df, row_colors = _expand_long_text_rows(df, row_colors, base_cols)
+    sections.append((title, df, row_colors))
+
+
+def _append_chart_section(
+    sections: List[Tuple],
+    title: str,
+    fig,
+    *,
+    empty_message: str = "No data available for this chart.",
+    export_message: str = "Chart export unavailable (install 'kaleido' to enable image export).",
+) -> None:
+    if fig is None:
+        fallback = pd.DataFrame({"Info": [empty_message]})
+        sections.append((title, fallback, None))
+        return
+    img_bytes = _figure_to_image(fig)
+    if img_bytes is None:
+        fallback = pd.DataFrame({"Info": [export_message]})
+        sections.append((title, fallback, None))
+        return
+    sections.append((title, None, None, img_bytes))
+
+def _strip_html_tags(text: object) -> str:
+    if text is None:
+        return ''
+    return _TAG_RE.sub('', str(text)).strip()
+
+
+def _chunk_plain_text(text: str, max_chars: int) -> List[str]:
+    pieces: List[str] = []
+    current: List[str] = []
+    current_len = 0
+    for token in [t.strip() for t in re.split(r',\s*', text) if t.strip()]:
+        addition = len(token) + (2 if current else 0)
+        if current and current_len + addition > max_chars:
+            pieces.append(', '.join(current))
+            current = [token]
+            current_len = len(token)
+        else:
+            current.append(token)
+            current_len += addition
+    if current:
+        pieces.append(', '.join(current))
+    return pieces or [text]
+
+
+def _split_group_text(group: str, max_chars: int) -> List[str]:
+    cleaned = group.strip()
+    if len(cleaned) <= max_chars:
+        return [cleaned]
+    if ':' not in cleaned:
+        return _chunk_plain_text(cleaned, max_chars)
+    head, tail = cleaned.split(':', 1)
+    head = head.strip()
+    tail = tail.strip()
+    if tail.startswith('(') and tail.endswith(')'):
+        wards = [w.strip() for w in tail[1:-1].split(',') if w.strip()]
+        if not wards:
+            return [cleaned]
+        chunks: List[str] = []
+        current: List[str] = []
+        current_len = len(head) + 3
+        for ward in wards:
+            addition = len(ward) + (2 if current else 0)
+            if current and current_len + addition + 1 > max_chars:
+                label = head if not chunks else f"{head} (cont.)"
+                chunks.append(f"{label}: (" + ', '.join(current) + ')')
+                current = [ward]
+                current_len = len(head) + 3 + len(ward)
+            else:
+                current.append(ward)
+                current_len += addition
+        if current:
+            label = head if not chunks else f"{head} (cont.)"
+            chunks.append(f"{label}: (" + ', '.join(current) + ')')
+        return chunks
+    return _chunk_plain_text(cleaned, max_chars)
+
+
+def _chunk_grouped_text(value: object, max_chars: int) -> List[str]:
+    plain = _strip_html_tags(value)
+    if not plain or plain == '-':
+        return [plain or '-']
+    groups: List[str] = []
+    segment = ''
+    depth = 0
+    for char in plain:
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            if depth > 0:
+                depth -= 1
+        if char == ',' and depth == 0:
+            if segment.strip():
+                groups.append(segment.strip())
+            segment = ''
+        else:
+            segment += char
+    if segment.strip():
+        groups.append(segment.strip())
+
+    expanded: List[str] = []
+    for group in groups:
+        expanded.extend(_split_group_text(group, max_chars))
+
+    chunks: List[List[str]] = []
+    current_chunk: List[str] = []
+    current_len = 0
+    for item in expanded:
+        addition = len(item) + (2 if current_chunk else 0)
+        if current_chunk and current_len + addition > max_chars:
+            chunks.append(current_chunk)
+            current_chunk = [item]
+            current_len = len(item)
+        else:
+            current_chunk.append(item)
+            current_len += addition
+    if current_chunk:
+        chunks.append(current_chunk)
+    if not chunks:
+        return [html.escape(plain)]
+    return ['<br/>'.join(html.escape(part) for part in chunk) for chunk in chunks]
+
+
+def _expand_long_text_rows(
+    df: pd.DataFrame,
+    row_colors: Optional[List[str]],
+    base_cols: Optional[Sequence[str]],
+) -> Tuple[pd.DataFrame, Optional[List[str]]]:
+    targets = [col for col in df.columns if col in LONG_TEXT_COLUMNS]
+    if not targets:
+        return df, row_colors
+    base_cols = list(base_cols or ([df.columns[0]] if len(df.columns) else []))
+    numeric_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
+    new_rows: List[pd.Series] = []
+    new_colors: List[str] = []
+
+    df_reset = df.reset_index(drop=True)
+    for idx, row in df_reset.iterrows():
+        chunk_map: dict[str, List[str]] = {}
+        max_chunks = 1
+        for col in targets:
+            pieces = _chunk_grouped_text(row.get(col, ''), MAX_CELL_TEXT_CHARS)
+            chunk_map[col] = pieces
+            if len(pieces) > max_chunks:
+                max_chunks = len(pieces)
+        for part_idx in range(max_chunks):
+            new_row = row.copy()
+            for col in targets:
+                parts = chunk_map.get(col, [''])
+                new_row[col] = parts[part_idx] if part_idx < len(parts) else ''
+            if part_idx > 0:
+                for col in df.columns:
+                    if col in targets:
+                        continue
+                    if col in base_cols:
+                        value = row.get(col, '')
+                        new_row[col] = f"{value} (cont.)" if part_idx == 1 and str(value).strip() else ''
+                    else:
+                        new_row[col] = ''
+                for col in numeric_cols:
+                    if col not in targets:
+                        new_row[col] = ''
+            new_rows.append(new_row)
+            if row_colors is not None:
+                if idx < len(row_colors):
+                    new_colors.append(row_colors[idx])
+    if not new_rows:
+        return df, row_colors
+    new_df = pd.DataFrame(new_rows, columns=df.columns)
+    return new_df, (new_colors if row_colors is not None else row_colors)
 
 
 def _safe_filename(text: str) -> str:
@@ -421,7 +798,7 @@ def _format_cell(value: object) -> str:
     return text
 
 
-def _build_summary_lines(df: pd.DataFrame, sel_front: str, sel_party: str) -> List[str]:
+def _build_summary_lines(df: pd.DataFrame, sel_front: str, sel_party: str, *, include_majority: bool = True) -> List[str]:
     """Build HTML-ready summary lines for the selected scope."""
     lines: List[str] = ["Summary"]
 
@@ -433,7 +810,7 @@ def _build_summary_lines(df: pd.DataFrame, sel_front: str, sel_party: str) -> Li
             f'<font color="{sel_color}"><b>{sel_party}</b></font> secured 0 votes (0.00%) out of 0 total votes.'
         )
         lines.append("Won 0 seats out of 0 contested.")
-        lines.append("Total seats: 0 | Majority mark: 0")
+        lines.append("Total seats: 0")
         return lines
 
     rank_series = pd.to_numeric(df.get("Rank"), errors="coerce")
@@ -495,7 +872,10 @@ def _build_summary_lines(df: pd.DataFrame, sel_front: str, sel_party: str) -> Li
         f'<font color="{sel_color}"><b>{sel_party}</b></font> secured {party_votes:,} votes ({share:.2f}%) out of {total_votes:,} total votes.'
     )
     lines.append(f"Won {won} seats out of {contested} contested.")
-    lines.append(f"Total seats: {total_seats:,} | Majority mark: {majority_mark:,}")
+    if include_majority:
+        lines.append(f"Total seats: {total_seats:,} | Majority mark: {majority_mark:,}")
+    else:
+        lines.append(f"Total seats: {total_seats:,}")
     lb_code_series = df.get("LBCode")
     if lb_code_series is not None:
         lb_values = lb_code_series.dropna().astype(str).unique()
@@ -506,10 +886,11 @@ def _build_summary_lines(df: pd.DataFrame, sel_front: str, sel_party: str) -> Li
     return lines
 
 
+
 def _build_pdf_document(
     title: str,
     summary_lines: Sequence[str],
-    sections: Sequence[Tuple[str, pd.DataFrame, Optional[List[str]]]],
+    sections: Sequence[Tuple],
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=24, leftMargin=24, topMargin=28, bottomMargin=28)
@@ -566,10 +947,33 @@ def _build_pdf_document(
         ]
     )
 
-    for sec_title, df, row_colors in sections:
+    for section in sections:
+        chart_bytes = None
+        if isinstance(section, tuple) and len(section) == 4:
+            sec_title, df, row_colors, chart_bytes = section
+        elif isinstance(section, tuple) and len(section) == 3:
+            sec_title, df, row_colors = section
+        else:
+            # unexpected structure; best effort unpacking
+            sec_title = section[0]
+            df = section[1] if len(section) > 1 else None
+            row_colors = section[2] if len(section) > 2 else None
+            chart_bytes = section[3] if len(section) > 3 else None
+
         elems.append(Spacer(1, 10))
         elems.append(Paragraph(sec_title, styles["Heading3"]))
-        if df is None or df.empty:
+
+        if chart_bytes:
+            try:
+                img = Image(io.BytesIO(chart_bytes))
+                img._restrictSize(doc.width, 320)
+                img.hAlign = "CENTER"
+                elems.append(img)
+            except Exception:
+                elems.append(Paragraph("Unable to render chart image.", styles["BodyText"]))
+            continue
+
+        if df is None or (isinstance(df, pd.DataFrame) and df.empty):
             elems.append(Paragraph("No data available.", styles["BodyText"]))
             continue
 
@@ -580,12 +984,23 @@ def _build_pdf_document(
             cells = [Paragraph(_format_cell(value), body_paragraph) for value in row.tolist()]
             data.append(cells)
         col_width_map = {
-            "Strength Band": 90,
-            "Ward Count": 65,
-            "VoteBin": 80,
-            "Won": 55,
-            "Not Won": 65,
-            "Total": 65,
+            "Strength Band": 100,
+            "No. of Wards": 75,
+            "No. of Wards in 2025": 90,
+            "No of Wards": 75,
+            "Ward Count": 75,
+            "VoteBin": 55,
+            "Won": 40,
+            "Not Won": 45,
+            "Total": 45,
+            "Votes": 65,
+            "Contested": 55,
+            "Other Positions": 100,
+            "Vote Share (%)": 65,
+            "Strike Rate (%)": 70,
+            "WardNames {LBName in Bold: (Name of Wards from each LB in bracket)}": 320,
+            "Winning Wards": 180,
+            "Losing Wards": 180,
         }
         col_widths = [col_width_map.get(str(col), None) for col in table_df.columns]
         tbl = Table(data, repeatRows=1, colWidths=col_widths)
@@ -600,7 +1015,21 @@ def _build_pdf_document(
         tbl.setStyle(TableStyle(commands))
         elems.append(tbl)
 
-    doc.build(elems)
+    def _draw_header_footer(canvas, doc, show_header: bool) -> None:
+        canvas.saveState()
+        footer_text = f"Page {doc.page}"
+        canvas.setFont("Helvetica", 8)
+        canvas.drawCentredString(doc.pagesize[0] / 2.0, 20, footer_text)
+        if show_header:
+            canvas.setFont("Helvetica-Bold", 9)
+            canvas.drawString(doc.leftMargin, doc.pagesize[1] - 20, title)
+        canvas.restoreState()
+
+    doc.build(
+        elems,
+        onFirstPage=lambda canvas, doc: _draw_header_footer(canvas, doc, False),
+        onLaterPages=lambda canvas, doc: _draw_header_footer(canvas, doc, True),
+    )
     return buf.getvalue()
 
 
@@ -657,6 +1086,233 @@ def _filter_scope(df: pd.DataFrame, report_type: str, scope: dict) -> pd.DataFra
             d = d[d.get("LBName", "").astype(str) == str(lb_name)]
     return d
 
+
+
+
+def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -> Tuple[List[str], List[Tuple]]:
+    ward = df[df.get("TierNorm", df.get("Tier", "")).astype(str).str.title() == "Ward"].copy()
+    if ward.empty:
+        ward = df.copy()
+
+    summary_lines = _build_summary_lines(ward, sel_front, sel_party, include_majority=False)
+    sections: List[Tuple] = []
+
+    summary_result = summary_by_lb(ward, LB_WARD_COUNTS)
+    summary_table = getattr(summary_result, "frame", pd.DataFrame())
+    if not summary_table.empty:
+        summary_table = summary_table.rename(
+            columns={
+                "Wards (2020)": "No. of Wards",
+                "Wards (2025)": "No. of Wards in 2025",
+            }
+        )
+        _append_table_section(
+            sections,
+            "Summary Table",
+            summary_table,
+            getattr(summary_result, "row_colors", None),
+            reorder=["LBName", "No. of Wards", "No. of Wards in 2025", "New Wards", "Total Votes"],
+        )
+
+    front_result = front_performance(ward)
+    front_table = getattr(front_result, "frame", pd.DataFrame())
+    if not front_table.empty:
+        front_table = front_table.rename(columns={"Vote share (%)": "Vote Share (%)"})
+        front_table = _reshape_position_columns(front_table, ("Front",))
+        front_order = _rank_column_order(front_table, ("Front",))
+        _append_table_section(
+            sections,
+            "Front-wise Performance",
+            front_table,
+            getattr(front_result, "row_colors", None),
+            collapse_ranks=False,
+            base_cols=("Front",),
+            reorder=front_order,
+        )
+
+    party_result = party_performance(ward)
+    party_table = getattr(party_result, "frame", pd.DataFrame())
+    if not party_table.empty:
+        party_table = party_table.rename(columns={"Vote share (%)": "Vote Share (%)"})
+        party_table = _reshape_position_columns(party_table, ("Party", "Front"))
+        party_order = _rank_column_order(party_table, ("Party", "Front"))
+        _append_table_section(
+            sections,
+            "Party-wise Performance",
+            party_table,
+            getattr(party_result, "row_colors", None),
+            collapse_ranks=False,
+            base_cols=("Party", "Front"),
+            reorder=party_order,
+        )
+
+    seats_result = seats_by_front(ward)
+    seats_table = getattr(seats_result, "frame", pd.DataFrame())
+    if not seats_table.empty:
+        numeric_cols = seats_table.select_dtypes(include="number").columns
+        if len(numeric_cols):
+            seats_table[numeric_cols] = seats_table[numeric_cols].fillna(0).astype(int)
+        _append_table_section(
+            sections,
+            "Front-wise Seats Won",
+            seats_table,
+            getattr(seats_result, "row_colors", None),
+            reorder=["LBName", "UDF", "LDF", "NDA", "OTH", "Leader"],
+        )
+
+    votes_result = votes_by_front(ward)
+    votes_table = getattr(votes_result, "frame", pd.DataFrame())
+    if not votes_table.empty:
+        front_cols = [col for col in FRONT_ORDER if col in votes_table.columns]
+        total_mask = votes_table.get("LBName", pd.Series(dtype=str)).astype(str).str.lower() == "total"
+        data_rows = votes_table[~total_mask].copy()
+        total_row = votes_table[total_mask].copy() if total_mask.any() else pd.DataFrame(columns=votes_table.columns)
+        if front_cols:
+            for frame in (data_rows, total_row):
+                if not frame.empty:
+                    frame[front_cols] = frame[front_cols].apply(pd.to_numeric, errors="coerce").fillna(0).astype(int)
+            leader_colors = []
+            for _, row in data_rows.iterrows():
+                votes = {front: float(row.get(front, 0) or 0) for front in front_cols}
+                best_front = max(votes, key=votes.get) if votes else None
+                top_value = votes.get(best_front, 0) if votes else 0
+                if list(votes.values()).count(top_value) > 1:
+                    leader_colors.append(DEFAULT_BG_COLOR)
+                else:
+                    leader_colors.append(FRONT_BG_COLORS.get(best_front, DEFAULT_BG_COLOR))
+        else:
+            leader_colors = [DEFAULT_BG_COLOR] * len(data_rows)
+        front_totals = (total_row.iloc[0][front_cols].astype(float) if not total_row.empty else data_rows[front_cols].sum(numeric_only=True)) if front_cols else pd.Series(dtype=float)
+        grand_total = float(front_totals.sum()) if not front_totals.empty else 0.0
+        share_values = {front: (front_totals.get(front, 0.0) / grand_total * 100) if grand_total > 0 else 0.0 for front in front_cols}
+        share_row = {"LBName": "Vote Share %"}
+        share_row.update({front: f"{share_values.get(front, 0.0):.2f}%" for front in front_cols})
+        position_series = front_totals.rank(ascending=False, method="dense") if not front_totals.empty else pd.Series(dtype=float)
+        position_row = {"LBName": "Front Position"}
+        position_row.update({front: int(position_series.get(front, np.nan)) if not pd.isna(position_series.get(front, np.nan)) else '' for front in front_cols})
+        assembled = [data_rows]
+        if share_row:
+            assembled.append(pd.DataFrame([share_row]))
+        if position_row:
+            assembled.append(pd.DataFrame([position_row]))
+        if not total_row.empty:
+            assembled.append(total_row)
+        votes_display = pd.concat(assembled, ignore_index=True, sort=False)
+        votes_display_columns = ["LBName", *front_cols]
+        votes_display = votes_display[[col for col in votes_display_columns if col in votes_display.columns]]
+        display_colors = leader_colors
+        if share_row:
+            display_colors.append(DEFAULT_BG_COLOR)
+        if position_row:
+            display_colors.append(DEFAULT_BG_COLOR)
+        if not total_row.empty:
+            display_colors.extend([DEFAULT_BG_COLOR] * len(total_row))
+        _append_table_section(
+            sections,
+            "Votes by Front",
+            votes_display,
+            display_colors,
+            reorder=votes_display_columns,
+        )
+
+    lb_result = party_lb_performance(ward, sel_party)
+    lb_table = getattr(lb_result, "frame", pd.DataFrame())
+    if not lb_table.empty:
+        lb_table = lb_table.rename(columns={"Vote share (%)": "Vote Share (%)"})
+        lb_table = _reshape_position_columns(lb_table, ("LBName",))
+        lb_order = _rank_column_order(lb_table, ("LBName",))
+        _append_table_section(
+            sections,
+            f"{sel_party} - LB-wise Performance",
+            lb_table,
+            getattr(lb_result, "row_colors", None),
+            collapse_ranks=False,
+            base_cols=("LBName",),
+            reorder=lb_order,
+        )
+
+    opponent_result = opponent_breakdown(ward, sel_party)
+    opponent_table = getattr(opponent_result, "frame", pd.DataFrame())
+    if not opponent_table.empty:
+        opp_colors = [PARTY_BG_COLORS.get(str(row.get("Party", "")), DEFAULT_BG_COLOR) for _, row in opponent_table.iterrows()]
+        sections.append((f"Opponent Breakdown - {sel_party}", opponent_table.reset_index(drop=True), opp_colors))
+
+    strength_fig = strength_chart(ward, sel_party)
+    _append_chart_section(
+        sections,
+        "Number of Strong and Weak Wards",
+        strength_fig,
+        empty_message="No ward-level strength data available for the selected party.",
+    )
+
+    vote_bin_fig = vote_bin_chart(ward, sel_party)
+    _append_chart_section(
+        sections,
+        "VoteBin Analysis (Won vs Not Won)",
+        vote_bin_fig,
+        empty_message="No VoteBin distribution available for the selected party.",
+    )
+
+    strength_result = strength_table(ward, sel_party)
+    strength_frame = getattr(strength_result, "frame", pd.DataFrame())
+    if not strength_frame.empty:
+        strength_frame = strength_frame.rename(
+            columns={
+                "Ward Count": "No of Wards",
+            }
+        )
+        _append_table_section(
+            sections,
+            f"{sel_party} - Lead Strength",
+            strength_frame,
+            getattr(strength_result, "row_colors", None),
+            reorder=["Strength Band", "No of Wards", "Ward Names"],
+            base_cols=("Strength Band",),
+        )
+
+    vote_strength_result = vote_share_strength(ward, sel_party)
+    vote_strength_frame = getattr(vote_strength_result, "frame", pd.DataFrame())
+    if not vote_strength_frame.empty:
+        _append_table_section(
+            sections,
+            f"{sel_party} - Vote Share Strength",
+            vote_strength_frame,
+            getattr(vote_strength_result, "row_colors", None),
+            reorder=["VoteBin", "Won", "Not Won", "Total", "Winning Wards", "Losing Wards"],
+            base_cols=("VoteBin",),
+        )
+
+    strong_result = strongest_wards(ward, sel_party, threshold=50.0, limit=20)
+    strong_frame = getattr(strong_result, "frame", pd.DataFrame())
+    if not strong_frame.empty:
+        strong_frame = strong_frame.rename(columns={"Vote share (%)": "Vote Share (%)"})
+        if "LBName" in strong_frame.columns:
+            strong_frame["LBName"] = strong_frame["LBName"].astype(str).map(lambda v: f"<b>{html.escape(v)}</b>" if v.strip() else v)
+        _append_table_section(
+            sections,
+            "Strongest Wards",
+            strong_frame,
+            getattr(strong_result, "row_colors", None),
+            reorder=["LBName", "WardName", "Vote Share (%)", "Rank"],
+            base_cols=("LBName",),
+        )
+
+    weak_result = weakest_wards(ward, sel_party, threshold=45.0, limit=20)
+    weak_frame = getattr(weak_result, "frame", pd.DataFrame())
+    if not weak_frame.empty:
+        weak_frame = weak_frame.rename(columns={"Vote share (%)": "Vote Share (%)"})
+        if "LBName" in weak_frame.columns:
+            weak_frame["LBName"] = weak_frame["LBName"].astype(str).map(lambda v: f"<b>{html.escape(v)}</b>" if v.strip() else v)
+        _append_table_section(
+            sections,
+            "Weakest Wards",
+            weak_frame,
+            getattr(weak_result, "row_colors", None),
+            reorder=["LBName", "WardName", "Vote Share (%)", "Rank"],
+            base_cols=("LBName",),
+        )
+
+    return summary_lines, sections
 
 def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -> Tuple[List[str], List[Tuple[str, pd.DataFrame, Optional[List[str]]]]]:
     ward = df[df.get("TierNorm", df.get("Tier", "")).astype(str).str.title() == "Ward"].copy()
@@ -735,6 +1391,8 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -
     return summary_lines, sections
 
 def _generate_sections(df: pd.DataFrame, report_type: str, sel_front: str, sel_party: str) -> Tuple[List[str], List[Tuple[str, pd.DataFrame, Optional[List[str]]]]]:
+    if report_type == "Assembly":
+        return _generate_assembly_sections(df, sel_front, sel_party)
     return _generate_scope_sections(df, sel_front, sel_party)
 
 
@@ -768,10 +1426,10 @@ def main() -> None:
     scope: dict = {}
 
     if report_type == "District":
-        districts = ["All Kerala"] + sorted(df.get("District", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        districts = sorted(df.get("District", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
         scope["District"] = st.selectbox("District", districts, index=0)
     elif report_type == "Assembly":
-        districts = ["All"] + sorted(df.get("District", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        districts = sorted(df.get("District", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
         sel_d = st.selectbox("District", districts, index=0)
         scope["District"] = sel_d
         asm_candidates = ["Assembly", "ACName", "AssemblyName", "Constituency"]
@@ -784,7 +1442,11 @@ def main() -> None:
         sel_d = st.selectbox("District", districts, index=0)
         scope["District"] = sel_d
         dfx = df[df.get("District", "").astype(str) == str(sel_d)]
-        lb_types = sorted(dfx.get("LBType", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        allowed_lb_types = {"Grama", "Municipality", "Corporation"}
+        lb_types_raw = sorted(dfx.get("LBType", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        lb_types = [lb for lb in lb_types_raw if lb in allowed_lb_types]
+        if not lb_types:
+            lb_types = lb_types_raw
         sel_lb_type = st.selectbox("Local Body Type", lb_types, index=0 if lb_types else None)
         scope["LBType"] = sel_lb_type
         dfx2 = dfx[dfx.get("LBType", "").astype(str) == str(sel_lb_type)] if sel_lb_type else dfx
@@ -823,3 +1485,19 @@ def main() -> None:
 
 
 main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

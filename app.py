@@ -1,43 +1,38 @@
-import streamlit as st
+﻿import streamlit as st
 
-st.set_page_config(page_title="LSGD Explorer", page_icon="dY-3�,?", layout="wide")
+st.set_page_config(page_title="LSGD Explorer", page_icon="dY", layout="wide")
 
-# optional: tiny CSS polish for sidebar links
+st.title("LSGD Election Insights Dashboard")
+
 st.markdown(
     """
-    <style>
-      section[data-testid="stSidebar"] .stMarkdown a { display:block; padding:6px 2px; }
-    </style>
-    """,
-    unsafe_allow_html=True,
+    Dive into the Kerala Local Self-Government (LSGD) election story with a dashboard
+    built for strategists, data teams, and campaign analysts. Use the sidebar to move
+    between focused analysis tabs - every page loads data only when you open it, so the
+    experience stays fast and lightweight.
+    """
 )
 
-st.title("LSGD Election Explorer")
-st.caption("Use the sidebar to open any page.")
-
-# Landing page: no dataset is loaded here.
+st.subheader("Highlights at a Glance")
 st.markdown(
     """
-    Explore Kerala Local Self-Government (LSGD) election results across districts,
-    assemblies, local bodies, and wards. Analyze party and front performance,
-    compare trends, and browse ready-to-share reports. This home page keeps things
-    light — data is only loaded when you open a specific page from the sidebar.
+    - **Complete coverage**: District, Assembly, Local Body, and Ward level snapshots with consistent colour coding for fronts and parties.
+    - **Actionable breakdowns**: Strike-rate, vote-share, and positional tables that surface where momentum is gained or lost.
+    - **Assembly-ready decks**: PDF exports stitch tables, charts, and formatted ward lists together for instant sharing.
+    - **Micro insights**: Strong vs weak ward rolls, vote-bin distributions, and opponent matchups reveal ground reality quickly.
+    - **Flexible filters**: Pick your district, assembly, front, or party from the sidebar to drill straight into the stories you need.
+    """
+)
+
+st.subheader("Where to go next")
+st.markdown(
+    """
+    - **Front / Party pages**: Track performance, vote bins, and strength bands with export-ready visuals.
+    - **Assembly & Local Body views**: Compare alliances across institutions and spot shifts between 2020 and 2025 ward maps.
+    - **Reports**: Generate curated PDFs for stakeholder briefings, including ward groupings and chart snapshots.
+    - **Ward explorer**: Zoom right down to candidate-level numbers, leads, and trails.
     """
 )
 
 st.markdown("---")
-st.subheader("Pages")
-st.markdown(
-    """
-    - **Overall**: High-level summary of votes, seats, and trends across the state.
-    - **District**: Drill down into results and metrics by district.
-    - **Assembly**: View outcomes aggregated by assembly segments.
-    - **Local Body**: Analyze performance by local body type and institution.
-    - **Ward**: Ward-level details including winners, margins, and turnout.
-    - **Front**: Alliance-wise performance and comparisons across tiers.
-    - **Party**: Selected party’s vote share, seats, and key opponent breakdowns.
-    - **Other**: Additional cuts, comparisons, and exploratory views.
-    - **Reports**: Curated tables and exports for quick sharing.
-    """
-)
-
+st.caption("Navigate via the sidebar to start exploring - every selection refreshes the insights in seconds.")

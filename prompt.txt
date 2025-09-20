@@ -1,0 +1,17 @@
+For assembly report in Download.py make the following edits
+edits are inteded only for when assembly selected
+
+1. In summary section at first no need to include Majority mark.
+2. In front wise Performance, Party wise performance, selected party LB-wise performance tables:
+don't concatenate Other positions into single column. make seperate columns for each positions.
+3. In fornt-wise seats won table the number of seats won format is 18.00. Make it in whole number format
+4. In votes by  front table add the additional rows before total
+- Vote Share % of each front.
+- Position of front based on total votes.
+-color the rows based on the front with more votes in each lb.
+
+5. In lead/ trail strength tables make LB Name bold. in colum heading rename long name as Ward Names
+6. in vote share strength table the row color should be based on the Vote Bin strength.
+The text color of wards should be based on win & losing
+make the LB Names bold.
+
