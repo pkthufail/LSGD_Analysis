@@ -14,4 +14,3 @@ don't concatenate Other positions into single column. make seperate columns for 
 6. in vote share strength table the row color should be based on the Vote Bin strength.
 The text color of wards should be based on win & losing
 make the LB Names bold.
-
