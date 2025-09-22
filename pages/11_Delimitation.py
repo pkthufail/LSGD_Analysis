@@ -42,10 +42,11 @@ def _summarize_lb(group: pd.DataFrame) -> dict[str, object]:
 
     if avg_total:
         rel = (group["TotalVoters"] - avg_total) / avg_total * 100
-        above = int((rel >= 25).sum())
-        below = int((rel <= -25).sum())
+        abs_rel = rel.abs()
+        count_25 = int((abs_rel >= 25).sum())
+        count_10 = int((abs_rel >= 10).sum())
     else:
-        above = below = 0
+        count_25 = count_10 = 0
 
     return {
         "Total Voters": total,
@@ -54,8 +55,8 @@ def _summarize_lb(group: pd.DataFrame) -> dict[str, object]:
         "Max/Min Ratio": round(ratio, 2),
         "Gini": round(gini, 3),
         "CV": round(cv, 3),
-        "Wards >= +25%": above,
-        "Wards <= -25%": below,
+        "Wards |Rel Dev| >= 25%": count_25,
+        "Wards |Rel Dev| >= 10%": count_10,
     }
 
 
@@ -221,6 +222,17 @@ def _render_district_tab() -> None:
             st.info("No local bodies found for the selected district.")
             return
 
+        group_cols = ["LBName", "Type"]
+        means = dist_df.groupby(group_cols, dropna=False)["TotalVoters"].transform("mean")
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rel_dev_raw = np.where(means.to_numpy() != 0, (dist_df["TotalVoters"].to_numpy() - means.to_numpy()) / means.to_numpy() * 100, 0.0)
+        rel_series = pd.Series(rel_dev_raw, index=dist_df.index)
+        rel_series = rel_series.fillna(0)
+        rel_series[~np.isfinite(rel_series)] = 0
+        dist_df["_abs_rel_raw"] = rel_series.abs()
+        dist_df["Rel Deviation (%)"] = rel_series.round(2)
+        dist_df["Abs Rel Deviation (%)"] = dist_df["_abs_rel_raw"].round(2)
+
         summary_rows: list[dict[str, object]] = []
         grouped = dist_df.groupby(["LBName", "Type"], dropna=False)
         for (lb_name, lb_type), group in grouped:
@@ -249,6 +261,22 @@ def _render_district_tab() -> None:
             use_container_width=True,
             hide_index=True,
         )
+
+        st.markdown("### Largest Relative Deviations")
+        top_df = dist_df.sort_values("_abs_rel_raw", ascending=False).head(25).copy()
+        if top_df.empty:
+            st.info("No ward-level deviations to display.")
+        else:
+            display_df = top_df[["LBName", "Type", "WardName", "WardCode", "TotalVoters", "Rel Deviation (%)", "Abs Rel Deviation (%)"]].copy()
+            display_df = display_df.rename(columns={"TotalVoters": "Total Voters"})
+            display_df["Type"] = display_df["Type"].fillna("")
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        dist_df.drop(columns="_abs_rel_raw", inplace=True, errors="ignore")
 
 
 _render_local_body_tab()
