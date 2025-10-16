@@ -18,7 +18,7 @@ try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image, PageBreak
     HAS_REPORTLAB = True
 except ModuleNotFoundError:
     HAS_REPORTLAB = False
@@ -993,6 +993,7 @@ def _build_pdf_document(
     header_subtitle: Optional[str] = None,
     header_info: Optional[str] = None,
     page_header: Optional[str] = None,
+    front_page: Optional[dict] = None,
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=24, leftMargin=24, topMargin=28, bottomMargin=28)
@@ -1042,6 +1043,86 @@ def _build_pdf_document(
         spaceBefore=6,
         spaceAfter=4,
     )
+
+    # Optional front page (used for Assembly reports)
+    if front_page:
+        big_header = ParagraphStyle(
+            "FrontTitle",
+            parent=styles["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=24,
+            leading=28,
+            alignment=1,  # center
+            spaceAfter=12,
+        )
+        label_style = ParagraphStyle(
+            "FrontLabel",
+            parent=styles["Heading4"],
+            fontName="Helvetica",
+            fontSize=12,
+            leading=14,
+            alignment=0,  # left
+            spaceAfter=6,
+        )
+        elems.append(Paragraph(str(front_page.get("title", "")).strip() or title, big_header))
+        fp_2020 = front_page.get("wards_2020", 0)
+        fp_2025 = front_page.get("wards_2025", 0)
+        elems.append(Paragraph(f"No of Wards: 2020: {int(fp_2020):,}, 2025: {int(fp_2025):,}", label_style))
+        elems.append(Spacer(1, 12))
+
+        # Front page metrics table
+        fp_table_df = front_page.get("table")
+        if isinstance(fp_table_df, pd.DataFrame) and not fp_table_df.empty:
+            header = [Paragraph(str(col), header_paragraph) for col in fp_table_df.columns]
+            data = [header]
+            for _, row in fp_table_df.iterrows():
+                cells = [Paragraph(_format_cell(value), body_paragraph) for value in row.tolist()]
+                data.append(cells)
+            # Fill full page width with 6 columns: Metric + five numeric columns
+            # widths: [Metric, 2020, 2025, Strike Rate, Expected Win, Expected Gain]
+            fixed_sum = 70 + 80 + 70 + 80 + 80
+            metric_width = max(doc.width - fixed_sum, 160)
+            col_widths = [metric_width, 70, 80, 70, 80, 80]
+            tbl = Table(data, repeatRows=1, colWidths=col_widths)
+            style_cmds = [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f2f2f2")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cccccc")),
+                ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                ("ALIGN", (0, 1), (0, -1), "LEFT"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("TOPPADDING", (0, 1), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+            ]
+            # Optional row background colors from front_page
+            row_colors = front_page.get("row_colors") if isinstance(front_page, dict) else None
+            if row_colors:
+                for idx, color_hex in enumerate(row_colors, start=1):  # +1 to offset header row
+                    try:
+                        style_cmds.append(("BACKGROUND", (0, idx), (-1, idx), colors.HexColor(str(color_hex))))
+                    except Exception:
+                        style_cmds.append(("BACKGROUND", (0, idx), (-1, idx), colors.HexColor(DEFAULT_BG_COLOR)))
+            tbl.setStyle(TableStyle(style_cmds))
+            elems.append(tbl)
+            # Independents lines (UDF & LDF) right after the first table
+            if isinstance(front_page, dict):
+                indep_lines = front_page.get("independents_lines")
+                if indep_lines:
+                    elems.append(Spacer(1, 6))
+                    for label, value in indep_lines:
+                        elems.append(Paragraph(f"{label}: {int(value):,}", label_style))
+            # Footnote for target percentage
+            if isinstance(front_page, dict) and front_page.get("target_pct") is not None:
+                elems.append(Spacer(1, 4))
+                elems.append(Paragraph(f"(+Target% applied: {int(front_page['target_pct'])}%)", styles["BodyText"]))
+
+        # (Second table removed as requested: values merged into first table)
+        elems.append(PageBreak())
 
     if header_subtitle is not None or header_info is not None:
         # New heading layout for Assembly / Local Body
@@ -1594,6 +1675,9 @@ def main() -> None:
         dfx = df if sel_d == "All" else df[df.get("District", "").astype(str) == str(sel_d)]
         assemblies = sorted(dfx.get(asm_col, pd.Series(dtype=str)).dropna().astype(str).unique().tolist()) if asm_col else []
         scope["Assembly"] = st.selectbox("Assembly", assemblies, index=0 if assemblies else None)
+        # Target percentage points (1-10) for projection
+        target_options = list(range(1, 11))
+        target_pct = st.selectbox("Target % (+ points)", target_options, index=0)
     else:
         districts = sorted(df.get("District", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
         sel_d = st.selectbox("District", districts, index=0)
@@ -1663,6 +1747,147 @@ def main() -> None:
             header_segment,
         ])
 
+    # Build optional front page for Assembly
+    front_page = None
+    if report_type == "Assembly":
+        asm_name = str(scope.get("Assembly") or "").strip()
+        ward_scope = scoped_df[scoped_df.get("TierNorm", scoped_df.get("Tier", "")).astype(str).str.title() == "Ward"].copy()
+        if ward_scope.empty:
+            ward_scope = scoped_df.copy()
+        # Determine unique ward keys
+        keys = _ward_join_keys(ward_scope) if isinstance(ward_scope, pd.DataFrame) else []
+        if keys:
+            wards_unique = ward_scope.dropna(subset=[k for k in keys if k in ward_scope.columns]).drop_duplicates(subset=[k for k in keys if k in ward_scope.columns])
+            seats_2020_total = int(len(wards_unique))
+        else:
+            seats_2020_total = int(len(ward_scope))
+        # Compute 2025 seats by summing wards_2025 for LB codes within scope
+        lb_codes = ward_scope.get("LBCode")
+        if lb_codes is not None:
+            codes = [str(c).strip() for c in lb_codes.dropna().astype(str).unique().tolist()]
+        else:
+            codes = []
+        seats_2025_total = 0
+        for code in codes:
+            info = LB_WARD_COUNTS.get(code)
+            if info and isinstance(info.get("wards_2025"), (int, float)):
+                seats_2025_total += int(info.get("wards_2025", 0))
+        # Fallback if nothing was found
+        if seats_2025_total == 0:
+            seats_2025_total = seats_2020_total
+
+        # Helper to count unique ward participation for a filter
+        def _count_unique(filter_mask: pd.Series, winners_only: bool = False) -> int:
+            part = ward_scope[filter_mask].copy()
+            if winners_only and "Rank" in part.columns:
+                part = part[pd.to_numeric(part["Rank"], errors="coerce") == 1]
+            if part.empty:
+                return 0
+            if keys:
+                part_u = part.dropna(subset=[k for k in keys if k in part.columns]).drop_duplicates(subset=[k for k in keys if k in part.columns])
+                return int(len(part_u))
+            return int(len(part))
+
+        # Selected Front
+        front_mask = ward_scope.get("Front", "").astype(str) == str(sel_front)
+        front_cont_20 = _count_unique(front_mask, winners_only=False)
+        front_won_20 = _count_unique(front_mask, winners_only=True)
+
+        # Selected Party
+        party_mask = ward_scope.get("Party", "").astype(str) == str(sel_party)
+        party_cont_20 = _count_unique(party_mask, winners_only=False)
+        party_won_20 = _count_unique(party_mask, winners_only=True)
+
+        # Major Party of Selected Front
+        major_map = {"UDF": "INC", "LDF": "CPI(M)", "NDA": "BJP", "OTH": "IND"}
+        major_party = major_map.get(str(sel_front), "-")
+        major_mask = ward_scope.get("Party", "").astype(str) == major_party
+        major_cont_20 = _count_unique(major_mask, winners_only=False)
+        major_won_20 = _count_unique(major_mask, winners_only=True)
+
+        # Front-wise independents for UDF & LDF
+        udf_cont_20 = _count_unique(ward_scope.get("Front", "").astype(str) == "UDF", winners_only=False)
+        ldf_cont_20 = _count_unique(ward_scope.get("Front", "").astype(str) == "LDF", winners_only=False)
+        udf_indep_2020 = max(0, seats_2020_total - int(udf_cont_20))
+        ldf_indep_2020 = max(0, seats_2020_total - int(ldf_cont_20))
+
+        def _project(val_2020: int) -> int:
+            if seats_2020_total > 0 and seats_2025_total >= 0:
+                return int(round((float(val_2020) / float(seats_2020_total)) * float(seats_2025_total)))
+            return 0
+
+        front_proj_total = _project(front_cont_20)
+        party_proj_total = _project(party_cont_20)
+        major_proj_total = _project(major_cont_20)
+        rows = [
+            (f"{sel_front} Total", front_cont_20, front_proj_total),
+            (f"{sel_front} Win",   front_won_20,  _project(front_won_20)),
+            (f"{sel_party} Total", party_cont_20,  party_proj_total),
+            (f"{sel_party} Win",   party_won_20,   _project(party_won_20)),
+            (f"{major_party} Total", major_cont_20,  major_proj_total),
+            (f"{major_party} Win",   major_won_20,   _project(major_won_20)),
+        ]
+        fp_table = pd.DataFrame(rows, columns=["Metric", "2020 Actuals", "2025 Projection"]) if rows else pd.DataFrame()
+        # Row colors for the metric table, aligned with Front/Party palettes
+        front_color = FRONT_BG_COLORS.get(str(sel_front), DEFAULT_BG_COLOR)
+        party_color = PARTY_BG_COLORS.get(str(sel_party), DEFAULT_BG_COLOR)
+        major_color = PARTY_BG_COLORS.get(str(major_party), DEFAULT_BG_COLOR)
+        fp_row_colors = [front_color, front_color, party_color, party_color, major_color, major_color]
+        # Build strike-rate projection table
+        tgt = float(target_pct) if 'target_pct' in locals() else 0.0
+        def _strike_rate(won: int, cont: int) -> float:
+            return round((float(won) / float(cont) * 100) if cont > 0 else 0.0, 2)
+        def _expected_wins(sr_pct: float, proj_seats_2025: int) -> int:
+            pct = max(0.0, min(100.0, sr_pct + float(tgt)))
+            return int(round(pct / 100.0 * float(max(0, proj_seats_2025))))
+        # Build expected wins using group-specific 2025 Total projection, and seat gain as (Wins 2020 - Expected Win 2025), with sign
+        front_sr = _strike_rate(front_won_20, front_cont_20)
+        front_exp = _expected_wins(front_sr, front_proj_total)
+        front_gain = f"{(int(front_exp) - int(front_won_20)):+,}"
+
+        party_sr = _strike_rate(party_won_20, party_cont_20)
+        party_exp = _expected_wins(party_sr, party_proj_total)
+        party_gain = f"{(int(party_exp) - int(party_won_20)):+,}"
+
+        major_sr = _strike_rate(major_won_20, major_cont_20)
+        major_exp = _expected_wins(major_sr, major_proj_total)
+        major_gain = f"{(int(major_exp) - int(major_won_20)):+,}"
+
+        proj_rows = [
+            (str(sel_front), front_sr, float(tgt), front_exp, front_gain),
+            (str(sel_party), party_sr, float(tgt), party_exp, party_gain),
+            (str(major_party), major_sr, float(tgt), major_exp, major_gain),
+        ]
+        # Second table removed; projections merged into first table.
+
+        # Extend first table with Strike Rate/Expected Win/Gain for the Win rows
+        for col in ["Strike Rate (%)", "Expected Win 2025", "Expected Seat Gain"]:
+            if col not in fp_table.columns:
+                fp_table[col] = "-"
+        mapping = {
+            f"{sel_front} Win": (front_sr, front_exp, front_gain),
+            f"{sel_party} Win": (party_sr, party_exp, party_gain),
+            f"{major_party} Win": (major_sr, major_exp, major_gain),
+        }
+        for label, (sr_val, exp_val, gain_val) in mapping.items():
+            mask = fp_table["Metric"].astype(str) == label
+            fp_table.loc[mask, "Strike Rate (%)"] = round(float(sr_val), 2)
+            fp_table.loc[mask, "Expected Win 2025"] = int(exp_val)
+            fp_table.loc[mask, "Expected Seat Gain"] = str(gain_val)
+
+        front_page = {
+            "title": asm_name,
+            "wards_2020": seats_2020_total,
+            "wards_2025": seats_2025_total,
+            "table": fp_table,
+            "row_colors": fp_row_colors,
+            "independents_lines": [
+                ("Estimated No of UDF Independents in 2020", udf_indep_2020),
+                ("Estimated No of LDF Independents in 2020", ldf_indep_2020),
+            ],
+            "target_pct": int(tgt),
+        }
+
     pdf_bytes = _build_pdf_document(
         title_for_pdf,
         summary_lines,
@@ -1670,6 +1895,7 @@ def main() -> None:
         header_subtitle=header_subtitle,
         header_info=header_info,
         page_header=page_header,
+        front_page=front_page,
     )
     file_name = _safe_filename("_".join(filter(None, title_bits)) + ".pdf")
 
