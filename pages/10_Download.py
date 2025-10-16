@@ -104,15 +104,17 @@ def _ensure_kaleido() -> bool:
 def _figure_to_image(fig, width: int = 900, height: int = 480, scale: int = 2) -> Optional[bytes]:
     if fig is None or pio is None:
         return None
-    if not _ensure_kaleido():
-        return None
+    # Try the most compatible path first (no explicit engine),
+    # then fall back to the figure method if available.
     try:
-        return pio.to_image(fig, format="png", width=width, height=height, scale=scale, engine="kaleido")
-    except Exception as exc:
-        if "kaleido" in str(exc).lower():
-            global HAS_KALEIDO
-            HAS_KALEIDO = False
-        return None
+        return pio.to_image(fig, format="png", width=width, height=height, scale=scale)
+    except Exception:
+        try:
+            if hasattr(fig, "to_image"):
+                return fig.to_image(format="png", width=width, height=height, scale=scale)
+        except Exception:
+            pass
+    return None
 
 
 def _is_ordinal_column(name: object) -> bool:
@@ -932,6 +934,17 @@ def _build_pdf_document(
         leading=12,
         spaceAfter=6,
     )
+    # Non-italic subheading for section titles
+    sub_header = ParagraphStyle(
+        "SubHeader",
+        parent=styles["Heading3"],
+        fontName="Helvetica",  # normal (non-italic, non-bold)
+        alignment=0,  # left
+        fontSize=12,
+        leading=14,
+        spaceBefore=6,
+        spaceAfter=4,
+    )
 
     if header_subtitle is not None or header_info is not None:
         # New heading layout for Assembly / Local Body
@@ -949,7 +962,7 @@ def _build_pdf_document(
         elems.append(Spacer(1, 8))
 
     if summary_lines:
-        elems.append(Paragraph(summary_lines[0], styles["Heading3"]))
+        elems.append(Paragraph(summary_lines[0], sub_header))
         for line in summary_lines[1:]:
             if not line.strip():
                 elems.append(Spacer(1, 4))
@@ -994,7 +1007,7 @@ def _build_pdf_document(
             chart_bytes = section[3] if len(section) > 3 else None
 
         elems.append(Spacer(1, 10))
-        elems.append(Paragraph(sec_title, styles["Heading3"]))
+        elems.append(Paragraph(sec_title, sub_header))
 
         if chart_bytes:
             try:
