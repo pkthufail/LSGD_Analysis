@@ -1,7 +1,7 @@
 streamlit
 pandas
-plotly
+plotly>=5.18,<6
 numpy
 altair
 reportlab
-kaleido
+kaleido==0.2.1
