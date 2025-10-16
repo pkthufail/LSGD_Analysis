@@ -1816,9 +1816,17 @@ def main() -> None:
                 return int(round((float(val_2020) / float(seats_2020_total)) * float(seats_2025_total)))
             return 0
 
-        front_proj_total = _project(front_cont_20)
-        party_proj_total = _project(party_cont_20)
-        major_proj_total = _project(major_cont_20)
+        # 2025 Projection totals with no independents:
+        # - Front Total (2025) = all 2025 seats (selected front contests all wards)
+        # - Party Total (2025) = (party_total_2020 / front_total_2020) * 2025 total seats
+        # - Major Party Total (2025) = (major_total_2020 / front_total_2020) * 2025 total seats
+        front_proj_total = int(seats_2025_total)
+        if int(front_cont_20) > 0:
+            party_proj_total = int(round((float(party_cont_20) / float(front_cont_20)) * float(seats_2025_total)))
+            major_proj_total = int(round((float(major_cont_20) / float(front_cont_20)) * float(seats_2025_total)))
+        else:
+            party_proj_total = 0
+            major_proj_total = 0
         rows = [
             (f"{sel_front} Total", front_cont_20, front_proj_total),
             (f"{sel_front} Win",   front_won_20,  _project(front_won_20)),
@@ -1860,9 +1868,10 @@ def main() -> None:
         ]
         # Second table removed; projections merged into first table.
 
-        # Extend first table with Strike Rate/Expected Win/Gain for the Win rows
+        # Extend first table with Strike Rate/Expected/Gain for the Win rows
         sr_label = "Target% + Strike Rate%"
-        for col in [sr_label, "Expected Win 2025", "Expected Seat Gain"]:
+        expected_label = "Expected in 2025"
+        for col in [sr_label, expected_label, "Expected Seat Gain"]:
             if col not in fp_table.columns:
                 fp_table[col] = "-"
         mapping = {
@@ -1872,9 +1881,24 @@ def main() -> None:
         }
         for label, (sr_val, exp_val, gain_val) in mapping.items():
             mask = fp_table["Metric"].astype(str) == label
-            fp_table.loc[mask, sr_label] = round(float(sr_val) + float(tgt), 2)
-            fp_table.loc[mask, "Expected Win 2025"] = int(exp_val)
+            # Show as "{Current SR}% + {Target%}"
+            try:
+                sr_disp = f"{float(sr_val):.2f}% + {int(float(tgt))}%"
+            except Exception:
+                sr_disp = f"{sr_val} + {tgt}%"
+            fp_table.loc[mask, sr_label] = sr_disp
+            fp_table.loc[mask, expected_label] = int(exp_val)
             fp_table.loc[mask, "Expected Seat Gain"] = str(gain_val)
+        # Also fill Expected in 2025 for Total rows using 2025 Projection totals
+        totals_fill = {
+            f"{sel_front} Total": int(front_proj_total),
+            f"{sel_party} Total": int(party_proj_total),
+            f"{major_party} Total": int(major_proj_total),
+        }
+        for t_label, proj_val in totals_fill.items():
+            mask = fp_table["Metric"].astype(str) == t_label
+            if mask.any():
+                fp_table.loc[mask, expected_label] = int(proj_val)
         # Drop '2025 Projection' from visible output
         if "2025 Projection" in fp_table.columns:
             fp_table = fp_table.drop(columns=["2025 Projection"], errors="ignore")
@@ -1883,7 +1907,7 @@ def main() -> None:
             "Metric",
             "2020 Actuals",
             sr_label,
-            "Expected Win 2025",
+            expected_label,
             "Expected Seat Gain",
         ]
         fp_table = fp_table[[c for c in desired_cols if c in fp_table.columns]]
