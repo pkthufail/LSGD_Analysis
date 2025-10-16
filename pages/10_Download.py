@@ -891,6 +891,9 @@ def _build_pdf_document(
     title: str,
     summary_lines: Sequence[str],
     sections: Sequence[Tuple],
+    header_subtitle: Optional[str] = None,
+    header_info: Optional[str] = None,
+    page_header: Optional[str] = None,
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=24, leftMargin=24, topMargin=28, bottomMargin=28)
@@ -911,9 +914,39 @@ def _build_pdf_document(
     )
 
     elems: List = []
-    elems.append(Paragraph(title, styles["Title"]))
-    elems.append(Paragraph(datetime.now().strftime("Generated: %Y-%m-%d %H:%M:%S"), styles["BodyText"]))
-    elems.append(Spacer(1, 8))
+
+    # Define custom header styles for medium and small font, if needed
+    medium_header = ParagraphStyle(
+        "MediumHeader",
+        parent=styles["Heading3"],
+        fontName="Helvetica-Bold",  # ensure non-italic
+        alignment=1,  # center
+        fontSize=14,
+        leading=16,
+        spaceAfter=4,
+    )
+    small_header = ParagraphStyle(
+        "SmallHeader",
+        parent=styles["BodyText"],
+        fontSize=10,
+        leading=12,
+        spaceAfter=6,
+    )
+
+    if header_subtitle is not None or header_info is not None:
+        # New heading layout for Assembly / Local Body
+        elems.append(Paragraph(title, medium_header))
+        if header_subtitle:
+            elems.append(Paragraph(header_subtitle, medium_header))
+        if header_info:
+            elems.append(Paragraph(header_info, small_header))
+        elems.append(Paragraph(datetime.now().strftime("Generated: %Y-%m-%d %H:%M:%S"), styles["BodyText"]))
+        elems.append(Spacer(1, 8))
+    else:
+        # Default heading layout
+        elems.append(Paragraph(title, styles["Title"]))
+        elems.append(Paragraph(datetime.now().strftime("Generated: %Y-%m-%d %H:%M:%S"), styles["BodyText"]))
+        elems.append(Spacer(1, 8))
 
     if summary_lines:
         elems.append(Paragraph(summary_lines[0], styles["Heading3"]))
@@ -1022,7 +1055,8 @@ def _build_pdf_document(
         canvas.drawCentredString(doc.pagesize[0] / 2.0, 20, footer_text)
         if show_header:
             canvas.setFont("Helvetica-Bold", 9)
-            canvas.drawString(doc.leftMargin, doc.pagesize[1] - 20, title)
+            header_text = page_header if page_header else title
+            canvas.drawString(doc.leftMargin, doc.pagesize[1] - 20, header_text)
         canvas.restoreState()
 
     doc.build(
@@ -1473,7 +1507,47 @@ def main() -> None:
             title_bits.append(str(scope[key]))
     title = " - ".join(filter(None, title_bits))
 
-    pdf_bytes = _build_pdf_document(title, summary_lines, sections)
+    # Prepare custom headings for Assembly and Local Body; keep District default
+    header_subtitle = None
+    header_info = None
+    title_for_pdf = title
+    page_header = None
+    if report_type in ("Assembly", "Local Body"):
+        title_for_pdf = "Performance Report"
+        if report_type == "Assembly":
+            asm_name = str(scope.get("Assembly") or "").strip()
+            header_subtitle = (f"Assembly: {asm_name}" if asm_name else "Assembly").upper()
+            type_text = "Assembly"
+            header_segment = f"{type_text}: {asm_name}" if asm_name else type_text
+        else:
+            lb_type_raw = str(scope.get("LBType") or "").strip()
+            lb_type_map = {"Grama": "Panchayath", "Municipality": "Municipality", "Corporation": "Corporation"}
+            lb_type = lb_type_map.get(lb_type_raw, lb_type_raw or "Local Body")
+            lb_name = str(scope.get("LBName") or "").strip()
+            header_subtitle = (f"{lb_type}: {lb_name}" if lb_name else lb_type).upper()
+            type_text = lb_type
+            header_segment = f"{lb_type}: {lb_name}" if lb_name else lb_type
+        district = str(scope.get("District") or "").strip()
+        header_info = ", ".join([
+            f"Front: {sel_front}",
+            f"Party: {sel_party}",
+            f"District: {district}" if district else "District: -",
+        ])
+        page_header = " - ".join([
+            str(sel_party or "").strip() or "Party",
+            str(sel_front or "").strip() or "Front",
+            district or "District",
+            header_segment,
+        ])
+
+    pdf_bytes = _build_pdf_document(
+        title_for_pdf,
+        summary_lines,
+        sections,
+        header_subtitle=header_subtitle,
+        header_info=header_info,
+        page_header=page_header,
+    )
     file_name = _safe_filename("_".join(filter(None, title_bits)) + ".pdf")
 
     st.download_button(
