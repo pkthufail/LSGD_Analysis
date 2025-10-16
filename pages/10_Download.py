@@ -384,6 +384,103 @@ def _chunk_grouped_text(value: object, max_chars: int) -> List[str]:
     return ['<br/>'.join(html.escape(part) for part in chunk) for chunk in chunks]
 
 
+def _ensure_columns(df: pd.DataFrame, columns: list[str], default=0) -> pd.DataFrame:
+    out = df.copy()
+    for col in columns:
+        if col not in out.columns:
+            out[col] = default
+    return out
+
+
+def _normalize_party_performance_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize a Party-wise Performance/Party Performance table to:
+    Front, Party, Won, 2nd, 3rd, Other Positions, Contested,
+    Strike Rate, Total Votes, Vote Share
+    - Creates missing columns with sensible defaults
+    - Aggregates rank columns >3 into 'Other Positions'
+    - Renames percentages to match required labels
+    - Drops any extra columns
+    """
+    if df is None or df.empty:
+        cols = ["Front", "Party", "Won", "2nd", "3rd", "Other Positions", "Contested", "Strike Rate", "Total Votes", "Vote Share"]
+        return pd.DataFrame(columns=cols)
+
+    table = df.copy()
+    # Standardize column names
+    table = table.rename(columns={
+        "Vote share (%)": "Vote Share",
+        "Vote Share (%)": "Vote Share",
+        "Strike Rate (%)": "Strike Rate",
+        "Votes": "Total Votes",
+    })
+
+    # Ensure Front/Party exist
+    for col in ("Front", "Party"):
+        if col not in table.columns:
+            table[col] = "-"
+
+    # Aggregate ordinal columns >3 into 'Other Positions'
+    table = _reshape_position_columns(table, ("Front", "Party"))
+
+    # Ensure core numeric columns exist
+    need_numeric = ["Won", "2nd", "3rd", "Other Positions", "Contested", "Total Votes"]
+    table = _ensure_columns(table, need_numeric, default=0)
+    for col in need_numeric:
+        if col in table.columns:
+            table[col] = pd.to_numeric(table[col], errors="coerce").fillna(0).astype(int)
+
+    # Derive Contested if missing or zero from ranks
+    if ("Contested" not in table.columns) or (table["Contested"].fillna(0) == 0).all():
+        contested = (
+            pd.to_numeric(table.get("Won", 0), errors="coerce").fillna(0)
+            + pd.to_numeric(table.get("2nd", 0), errors="coerce").fillna(0)
+            + pd.to_numeric(table.get("3rd", 0), errors="coerce").fillna(0)
+            + pd.to_numeric(table.get("Other Positions", 0), errors="coerce").fillna(0)
+        )
+        table["Contested"] = contested.astype(int)
+
+    # Derive Strike Rate if not present
+    if "Strike Rate" not in table.columns:
+        won = pd.to_numeric(table.get("Won", 0), errors="coerce").fillna(0)
+        cont = pd.to_numeric(table.get("Contested", 0), errors="coerce").fillna(0)
+        table["Strike Rate"] = np.where(cont > 0, (won / cont) * 100, 0.0)
+
+    # Derive Vote Share if not present
+    if "Vote Share" not in table.columns:
+        tv = pd.to_numeric(table.get("Total Votes", 0), errors="coerce").fillna(0)
+        grand = float(tv.sum())
+        table["Vote Share"] = np.where(grand > 0, tv / grand * 100, 0.0)
+
+    # Round percentage-like columns
+    if "Vote Share" in table.columns:
+        table["Vote Share"] = pd.to_numeric(table["Vote Share"], errors="coerce").fillna(0.0).round(2)
+    if "Strike Rate" in table.columns:
+        table["Strike Rate"] = pd.to_numeric(table["Strike Rate"], errors="coerce").fillna(0.0).round(2)
+
+    desired = [
+        "Front",
+        "Party",
+        "Won",
+        "2nd",
+        "3rd",
+        "Other Positions",
+        "Contested",
+        "Strike Rate",
+        "Total Votes",
+        "Vote Share",
+    ]
+    # Keep only desired columns in that order
+    table = table[[c for c in desired if c in table.columns]]
+    # Add any missing desired columns at end as zeros
+    for col in desired:
+        if col not in table.columns:
+            table[col] = 0 if col not in ("Front", "Party") else "-"
+    # Reorder exactly
+    table = table[desired]
+    return table
+
+
 def _expand_long_text_rows(
     df: pd.DataFrame,
     row_colors: Optional[List[str]],
@@ -1030,6 +1127,8 @@ def _build_pdf_document(
             cells = [Paragraph(_format_cell(value), body_paragraph) for value in row.tolist()]
             data.append(cells)
         col_width_map = {
+            "Front": 70,
+            "Party": 70,
             "Strength Band": 100,
             "No. of Wards": 75,
             "No. of Wards in 2025": 90,
@@ -1040,15 +1139,27 @@ def _build_pdf_document(
             "Not Won": 45,
             "Total": 45,
             "Votes": 65,
-            "Contested": 55,
-            "Other Positions": 100,
-            "Vote Share (%)": 65,
-            "Strike Rate (%)": 70,
+            "Total Votes": 70,
+            "Contested": 50,
+            "Other Positions": 60,
+            "Vote Share (%)": 60,
+            "Vote Share": 60,
+            "Strike Rate (%)": 60,
+            "Strike Rate": 60,
             "WardNames {LBName in Bold: (Name of Wards from each LB in bracket)}": 320,
             "Winning Wards": 180,
             "Losing Wards": 180,
         }
         col_widths = [col_width_map.get(str(col), None) for col in table_df.columns]
+        # Ensure specified widths fit within page width; leave room for auto columns if any
+        if any(w is not None for w in col_widths):
+            fixed_widths = [float(w) for w in col_widths if isinstance(w, (int, float))]
+            total_fixed = sum(fixed_widths)
+            auto_cols = sum(1 for w in col_widths if w is None)
+            target_width = float(doc.width) * (0.85 if auto_cols > 0 else 1.0)
+            if total_fixed > 0 and total_fixed > target_width:
+                scale = target_width / total_fixed
+                col_widths = [(float(w) * scale) if isinstance(w, (int, float)) else None for w in col_widths]
         tbl = Table(data, repeatRows=1, colWidths=col_widths)
         commands = list(header_style.getCommands()) + list(body_style.getCommands())
         if row_colors:
@@ -1180,17 +1291,15 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
     party_result = party_performance(ward)
     party_table = getattr(party_result, "frame", pd.DataFrame())
     if not party_table.empty:
-        party_table = party_table.rename(columns={"Vote share (%)": "Vote Share (%)"})
-        party_table = _reshape_position_columns(party_table, ("Party", "Front"))
-        party_order = _rank_column_order(party_table, ("Party", "Front"))
+        party_table = _normalize_party_performance_table(party_table)
         _append_table_section(
             sections,
             "Party-wise Performance",
             party_table,
             getattr(party_result, "row_colors", None),
             collapse_ranks=False,
-            base_cols=("Party", "Front"),
-            reorder=party_order,
+            base_cols=("Front", "Party"),
+            reorder=["Front", "Party", "Won", "2nd", "3rd", "Other Positions", "Contested", "Strike Rate", "Total Votes", "Vote Share"],
         )
 
     seats_result = seats_by_front(ward)
@@ -1389,6 +1498,7 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -
         party_summary["Front"] = pd.Categorical(party_summary["Front"].astype(str), categories=FRONT_ORDER, ordered=True)
         party_summary = party_summary.sort_values(["Front", "Party"]).reset_index(drop=True)
         party_summary["Front"] = party_summary["Front"].astype(str)
+        # Add Total Votes and Vote Share
         votes_by_pair = ward.groupby(["Front", "Party"], dropna=False)["Votes"].apply(lambda s: pd.to_numeric(s, errors="coerce").fillna(0).sum()).to_dict()
         party_summary["Total Votes"] = [int(votes_by_pair.get((row["Front"], row["Party"]), 0)) for _, row in party_summary.iterrows()]
         party_summary["Vote share (%)"] = [
@@ -1396,8 +1506,8 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -
             for value in party_summary["Total Votes"].astype(float)
         ]
         party_summary["Vote share (%)"] = party_summary["Vote share (%)"].round(2)
-        metrics = [c for c in party_summary.columns if c not in {"Front", "Party", "Total Votes", "Vote share (%)"}]
-        party_summary = party_summary[["Front", "Party", "Total Votes", "Vote share (%)", *metrics]]
+        # Normalize to required columns and order
+        party_summary = _normalize_party_performance_table(party_summary)
         party_colors = [PARTY_BG_COLORS.get(str(row.get("Party", "")), DEFAULT_BG_COLOR) for _, row in party_summary.iterrows()]
         sections.append(("Party Performance", party_summary, party_colors))
 
