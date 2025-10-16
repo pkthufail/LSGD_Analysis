@@ -286,7 +286,7 @@ def strength_table(df: pd.DataFrame, sel_party: str) -> TableResult:
     scoped = scoped.dropna(subset=["StrengthBand"])
     scoped["StrengthBand"] = pd.Categorical(scoped["StrengthBand"], categories=STRENGTH_ORDER, ordered=True)
     rows: List[Dict[str, object]] = []
-    for strength, frame in scoped.groupby("StrengthBand", dropna=False):
+    for strength, frame in scoped.groupby("StrengthBand", dropna=False, observed=False):
         count = len(frame)
         if count == 0:
             continue
@@ -388,7 +388,7 @@ def strength_chart(df: pd.DataFrame, sel_party: str) -> Optional[px.bar]:
     if summary.empty:
         return None
     summary["Strength"] = pd.Categorical(summary["Strength"], categories=STRENGTH_ORDER, ordered=True)
-    summary = summary.groupby("Strength", as_index=False).size().rename(columns={"size": "Wards"}).sort_values("Strength")
+    summary = summary.groupby("Strength", as_index=False, observed=False).size().rename(columns={"size": "Wards"}).sort_values("Strength")
     mirror = summary.copy()
     mirror["Display_Wards"] = mirror.apply(lambda row: -row["Wards"] if str(row["Strength"]).startswith("-") else row["Wards"], axis=1)
     mirror["Status"] = mirror["Strength"].apply(lambda s: "Lost" if str(s).startswith("-") else "Won")

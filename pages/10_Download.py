@@ -101,7 +101,7 @@ def _ensure_kaleido() -> bool:
     return bool(HAS_KALEIDO)
 
 
-def _figure_to_image(fig, width: int = 900, height: int = 480, scale: int = 2) -> Optional[bytes]:
+def _figure_to_image(fig, width: int = 800, height: int = 420, scale: int = 1) -> Optional[bytes]:
     if fig is None or pio is None:
         return None
     # Try the most compatible path first (no explicit engine),
@@ -938,7 +938,7 @@ def _build_pdf_document(
     sub_header = ParagraphStyle(
         "SubHeader",
         parent=styles["Heading3"],
-        fontName="Helvetica",  # normal (non-italic, non-bold)
+        fontName="Helvetica-Bold",  # bold, non-italic
         alignment=0,  # left
         fontSize=12,
         leading=14,
