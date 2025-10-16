@@ -1078,11 +1078,11 @@ def _build_pdf_document(
             for _, row in fp_table_df.iterrows():
                 cells = [Paragraph(_format_cell(value), body_paragraph) for value in row.tolist()]
                 data.append(cells)
-            # Fill full page width with 6 columns: Metric + five numeric columns
-            # widths: [Metric, 2020, 2025, Strike Rate, Expected Win, Expected Gain]
-            fixed_sum = 70 + 80 + 70 + 80 + 80
+            # Fill full page width with 5 columns: Metric + four numeric columns
+            # widths: [Metric, 2020, Target%+Strike, Expected Win, Expected Gain]
+            fixed_sum = 70 + 90 + 80 + 80
             metric_width = max(doc.width - fixed_sum, 160)
-            col_widths = [metric_width, 70, 80, 70, 80, 80]
+            col_widths = [metric_width, 70, 90, 80, 80]
             tbl = Table(data, repeatRows=1, colWidths=col_widths)
             style_cmds = [
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f2f2f2")),
@@ -1861,7 +1861,8 @@ def main() -> None:
         # Second table removed; projections merged into first table.
 
         # Extend first table with Strike Rate/Expected Win/Gain for the Win rows
-        for col in ["Strike Rate (%)", "Expected Win 2025", "Expected Seat Gain"]:
+        sr_label = "Target% + Strike Rate%"
+        for col in [sr_label, "Expected Win 2025", "Expected Seat Gain"]:
             if col not in fp_table.columns:
                 fp_table[col] = "-"
         mapping = {
@@ -1871,9 +1872,21 @@ def main() -> None:
         }
         for label, (sr_val, exp_val, gain_val) in mapping.items():
             mask = fp_table["Metric"].astype(str) == label
-            fp_table.loc[mask, "Strike Rate (%)"] = round(float(sr_val), 2)
+            fp_table.loc[mask, sr_label] = round(float(sr_val) + float(tgt), 2)
             fp_table.loc[mask, "Expected Win 2025"] = int(exp_val)
             fp_table.loc[mask, "Expected Seat Gain"] = str(gain_val)
+        # Drop '2025 Projection' from visible output
+        if "2025 Projection" in fp_table.columns:
+            fp_table = fp_table.drop(columns=["2025 Projection"], errors="ignore")
+        # Order display columns
+        desired_cols = [
+            "Metric",
+            "2020 Actuals",
+            sr_label,
+            "Expected Win 2025",
+            "Expected Seat Gain",
+        ]
+        fp_table = fp_table[[c for c in desired_cols if c in fp_table.columns]]
 
         front_page = {
             "title": asm_name,
