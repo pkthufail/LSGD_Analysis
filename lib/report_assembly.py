@@ -82,7 +82,8 @@ def _format_lb_grouped_html(pairs: Iterable[Tuple[str, str]], color: str, bold_l
         wards = sorted({w for w in grouped[lb_name] if w})
         if not wards:
             continue
-        ward_markup = ", ".join(f'<font color="{color}">{html.escape(w)}</font>' for w in wards)
+        # Keep black text (no color tags)
+        ward_markup = ", ".join(html.escape(w) for w in wards)
         lb_markup = f"<b>{html.escape(lb_name)}</b>" if bold_lb else html.escape(lb_name)
         pieces.append(f"{lb_markup}: ({ward_markup})")
     return ", ".join(pieces) if pieces else "-"

@@ -252,6 +252,8 @@ def _append_table_section(
     if table is None or table.empty:
         return
     df = table.copy()
+    if 'index' in df.columns:
+        df = df.drop(columns=['index'], errors='ignore')
     if rename_map:
         df = df.rename(columns=rename_map)
     if collapse_ranks and base_cols:
@@ -633,6 +635,29 @@ def _strength_color_from_value(value: object, invert: bool = False) -> str:
     band = _strength_from_lead(val)
     return STRENGTH_COLOR_MAP.get(band, DEFAULT_BG_COLOR)
 
+
+def _vote_bin_color(label: object) -> str:
+    """Color rows by VoteBin range similar to assembly logic."""
+    if label is None:
+        return DEFAULT_BG_COLOR
+    text = str(label).strip()
+    if not text:
+        return DEFAULT_BG_COLOR
+    nums = [float(m) for m in re.findall(r"\d+(?:\.\d+)?", text)]
+    if not nums:
+        return DEFAULT_BG_COLOR
+    avg = sum(nums) / len(nums)
+    if avg < 30:
+        return "#fde2e4"
+    if avg < 45:
+        return "#ffe5a1"
+    if avg < 55:
+        return "#f8f9fa"
+    if avg < 70:
+        return "#d4f3e4"
+    if avg < 85:
+        return "#bcefd4"
+    return "#8bdcb3"
 def _resolve_ward_label(series_df: pd.DataFrame) -> pd.Series:
     label_cols = ["WardName", "Ward", "WardLabel", "WardNo", "WardCode", "BoothName"]
     for col in label_cols:
@@ -647,6 +672,30 @@ def _format_name_list(names: list[str], color: str) -> str:
         return '-'
     tagged = [f'<font color="{color}">{html.escape(name)}</font>' for name in cleaned]
     return ', '.join(tagged)
+
+
+def _format_lb_grouped_html(pairs: list[tuple[str, str]], color: str) -> str:
+    """Format pairs of (LBName, WardName) into grouped HTML with bold LB and colored ward names.
+    Example: "<b>LB1</b>: (Ward1, Ward2), <b>LB2</b>: (WardA)"
+    """
+    grouped: dict[str, list[str]] = {}
+    for lb, ward in pairs:
+        lb_s = str(lb).strip()
+        ward_s = str(ward).strip()
+        if not ward_s:
+            continue
+        grouped.setdefault(lb_s or "-", []).append(ward_s)
+    if not grouped:
+        return "-"
+    parts: list[str] = []
+    for lb in sorted(grouped.keys()):
+        wards = sorted({w for w in grouped[lb] if w})
+        if not wards:
+            continue
+        # Keep text black (no color tags)
+        ward_markup = ", ".join(html.escape(w) for w in wards)
+        parts.append(f"<b>{html.escape(lb)}</b>: (" + ward_markup + ")")
+    return ", ".join(parts) if parts else "-"
 
 def _build_strength_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
     if df.empty:
@@ -667,22 +716,20 @@ def _build_strength_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
 
     part = part.assign(Strength=strength)
     if "WardName" in part.columns:
-        agg = (
-            part.dropna(subset=["Strength"])
-            .groupby("Strength", dropna=False)
-            .agg(
-                **{
-                    "Ward Count": ("WardName", "count"),
-                    "Ward Names": (
-                        "WardName",
-                        lambda x: ", ".join(
-                            sorted({str(v).strip() for v in x if pd.notna(v) and str(v).strip()})
-                        )
-                        or "-",
-                    ),
-                }
-            )
-        )
+        rows: list[dict[str, object]] = []
+        for strength_val, grp in part.dropna(subset=["Strength"]).groupby("Strength", dropna=False):
+            grp = grp.copy()
+            ward_series = _resolve_ward_label(grp)
+            lb_series = grp.get("LBName", pd.Series("-", index=grp.index)).astype(str)
+            pairs = [(lb, ward) for lb, ward in zip(lb_series, ward_series) if str(ward).strip()]
+            ward_names_html = _format_lb_grouped_html(pairs, WINNING_WARD_COLOR)
+            unique_wards = len({str(w).strip() for w in ward_series if str(w).strip()})
+            rows.append({
+                "Strength": strength_val,
+                "Ward Count": unique_wards,
+                "Ward Names": ward_names_html,
+            })
+        agg = pd.DataFrame(rows)
     else:
         agg = (
             part.dropna(subset=["Strength"])
@@ -691,7 +738,7 @@ def _build_strength_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
         )
         agg["Ward Names"] = "-"
 
-    agg = agg.reset_index().rename(columns={"Strength": "Strength Band"})
+    agg = agg.rename(columns={"Strength": "Strength Band"})
     agg = agg.set_index("Strength Band").reindex(STRENGTH_ORDER).reset_index()
     agg["Ward Count"] = agg["Ward Count"].fillna(0).astype(int)
     agg["Ward Names"] = agg["Ward Names"].fillna("-")
@@ -713,6 +760,7 @@ def _build_votebin_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
     part["Rank"] = pd.to_numeric(part.get("Rank"), errors="coerce")
     part["Status"] = np.where(part["Rank"] == 1, "Won", "Not Won")
     part["_WardLabel"] = _resolve_ward_label(part)
+    part["LBName"] = part.get("LBName", "").astype(str)
 
     pivot = (
         part.groupby(["VoteBin", "Status"], dropna=False)
@@ -728,18 +776,27 @@ def _build_votebin_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
     pivot["Total"] = pivot[["Won", "Not Won"]].sum(axis=1)
     table = pivot.reset_index().sort_values("VoteBin").reset_index(drop=True)
 
-    def _collect(status: str) -> dict[str, list[str]]:
+    def _collect_pairs(status: str) -> dict[str, list[tuple[str, str]]]:
         subset = part[part["Status"] == status]
-        grouped = (
-            subset.groupby("VoteBin", dropna=False)["_WardLabel"]
-            .apply(lambda x: sorted({str(v).strip() for v in x if str(v).strip()}))
-        )
-        return {str(k): (list(v) if isinstance(v, (list, tuple)) else [str(v)]) for k, v in grouped.items()}
+        if subset.empty:
+            return {}
+        subset = subset.copy()
+        subset["_WardLabel"] = subset["_WardLabel"].astype(str)
+        pairs_by_vb: dict[str, list[tuple[str, str]]] = {}
+        for vb, df_vb in subset.groupby("VoteBin", dropna=False):
+            vb_pairs: list[tuple[str, str]] = []
+            for _, r in df_vb.iterrows():
+                lb = str(r.get("LBName", "")).strip()
+                ward = str(r.get("_WardLabel", "")).strip()
+                if ward:
+                    vb_pairs.append((lb, ward))
+            pairs_by_vb[str(vb)] = vb_pairs
+        return pairs_by_vb
 
-    winning = _collect("Won")
-    losing = _collect("Not Won")
-    table["Winning Wards"] = table["VoteBin"].map(lambda vb: _format_name_list(winning.get(str(vb), []), WINNING_WARD_COLOR))
-    table["Losing Wards"] = table["VoteBin"].map(lambda vb: _format_name_list(losing.get(str(vb), []), LOSING_WARD_COLOR))
+    winning = _collect_pairs("Won")
+    losing = _collect_pairs("Not Won")
+    table["Winning Wards"] = table["VoteBin"].map(lambda vb: _format_lb_grouped_html(winning.get(str(vb), []), WINNING_WARD_COLOR))
+    table["Losing Wards"] = table["VoteBin"].map(lambda vb: _format_lb_grouped_html(losing.get(str(vb), []), LOSING_WARD_COLOR))
     table = table[["VoteBin", "Won", "Not Won", "Total", "Winning Wards", "Losing Wards"]]
     return table
 
@@ -840,6 +897,7 @@ def _build_candidate_tables(df: pd.DataFrame, sel_party: str) -> Tuple[pd.DataFr
     )
 
     winners_tbl = pd.DataFrame({
+        "LBName": winners.get("LBName", pd.Series(index=winners.index)).astype(str) if "LBName" in winners.columns else pd.Series("-", index=winners.index),
         "Ward": winners.get("WardName", winners.get("WardNo", pd.Series(index=winners.index))).astype(str),
         "Candidate": winners.get("Candidate", pd.Series(index=winners.index)).astype(str),
         "Votes": pd.to_numeric(winners.get("Votes"), errors="coerce").fillna(0).astype(int),
@@ -865,6 +923,7 @@ def _build_candidate_tables(df: pd.DataFrame, sel_party: str) -> Tuple[pd.DataFr
     )
 
     losers_tbl = pd.DataFrame({
+        "LBName": losers.get("LBName", pd.Series(index=losers.index)).astype(str) if "LBName" in losers.columns else pd.Series("-", index=losers.index),
         "Ward": losers.get("WardName", losers.get("WardNo", pd.Series(index=losers.index))).astype(str),
         "Candidate": losers.get("Candidate", pd.Series(index=losers.index)).astype(str),
         "Votes": pd.to_numeric(losers.get("Votes"), errors="coerce").fillna(0).astype(int),
@@ -1551,7 +1610,7 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
 
     return summary_lines, sections
 
-def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -> Tuple[List[str], List[Tuple[str, pd.DataFrame, Optional[List[str]]]]]:
+def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str, report_type: Optional[str] = None) -> Tuple[List[str], List[Tuple[str, pd.DataFrame, Optional[List[str]]]]]:
     ward = df[df.get("TierNorm", df.get("Tier", "")).astype(str).str.title() == "Ward"].copy()
     if ward.empty:
         ward = df.copy()
@@ -1596,17 +1655,65 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -
     if party_scope.empty:
         party_scope = ward[ward.get("Party", "").astype(str) == sel_party].copy()
 
-    strength_table = _build_strength_table(party_scope, sel_party)
-    if not strength_table.empty:
-        strength_colors = [STRENGTH_COLOR_MAP.get(str(row.get("Strength Band", "")), DEFAULT_BG_COLOR) for _, row in strength_table.iterrows()]
-        sections.append((f"{sel_party} - Lead Strength", strength_table, strength_colors))
+    # Compute contested seats for selected party within scope (unique wards)
+    keys = _ward_join_keys(party_scope) if not party_scope.empty else []
+    if keys:
+        contested_count = int(
+            party_scope.dropna(subset=[k for k in keys if k in party_scope.columns])
+            .drop_duplicates(subset=[k for k in keys if k in party_scope.columns])
+            .shape[0]
+        )
+    else:
+        contested_count = int(len(party_scope))
 
-    vote_bin = _build_votebin_table(party_scope, sel_party)
-    if not vote_bin.empty:
-        party_color = PARTY_BG_COLORS.get(sel_party, DEFAULT_BG_COLOR)
-        vote_colors = [party_color for _ in range(len(vote_bin))]
-        sections.append((f"{sel_party} - Vote Share Strength", vote_bin, vote_colors))
+    # Always include the two graphs for District reports
+    if (report_type or "").lower() == "district":
+        strength_fig = strength_chart(ward, sel_party)
+        _append_chart_section(
+            sections,
+            "Number of Strong and Weak Wards",
+            strength_fig,
+            empty_message="No ward-level strength data available for the selected party.",
+        )
 
+        vote_bin_fig = vote_bin_chart(ward, sel_party)
+        _append_chart_section(
+            sections,
+            "VoteBin Analysis (Won vs Not Won)",
+            vote_bin_fig,
+            empty_message="No VoteBin distribution available for the selected party.",
+        )
+
+    include_lb_tables = True
+    if (report_type or "").lower() == "district" and contested_count >= 100:
+        include_lb_tables = False
+
+    if include_lb_tables:
+        strength_table = _build_strength_table(party_scope, sel_party)
+        if not strength_table.empty:
+            strength_colors = [STRENGTH_COLOR_MAP.get(str(row.get("Strength Band", "")), DEFAULT_BG_COLOR) for _, row in strength_table.iterrows()]
+            sections.append((f"{sel_party} - Lead Strength", strength_table, strength_colors))
+
+        vote_bin = _build_votebin_table(party_scope, sel_party)
+        if not vote_bin.empty:
+            vote_colors = [_vote_bin_color(row.get("VoteBin")) for _, row in vote_bin.iterrows()]
+            sections.append((f"{sel_party} - Vote Share Strength", vote_bin, vote_colors))
+
+        winners_tbl, losers_tbl = _build_candidate_tables(ward, sel_party)
+        # For District report, order by LBName then Vote share (%)
+        if (report_type or "").lower() == "district":
+            if not winners_tbl.empty and all(col in winners_tbl.columns for col in ["LBName", "Vote share (%)"]):
+                winners_tbl = winners_tbl.sort_values(["LBName", "Vote share (%)"], ascending=[True, False]).reset_index(drop=True)
+            if not losers_tbl.empty and all(col in losers_tbl.columns for col in ["LBName", "Vote share (%)"]):
+                losers_tbl = losers_tbl.sort_values(["LBName", "Vote share (%)"], ascending=[True, False]).reset_index(drop=True)
+        if not winners_tbl.empty:
+            win_colors = [_strength_color_from_value(row.get("Lead")) for _, row in winners_tbl.iterrows()]
+            sections.append((f"Winning candidates - {sel_party}", winners_tbl, win_colors))
+        if not losers_tbl.empty:
+            lose_colors = [_strength_color_from_value(row.get("Trail"), invert=True) for _, row in losers_tbl.iterrows()]
+            sections.append((f"Losing candidates - {sel_party}", losers_tbl, lose_colors))
+
+    # Opponent breakdown always included
     opponent_table = _build_opponent_table(ward, sel_party)
     if not opponent_table.empty:
         opponent_table = opponent_table.rename(
@@ -1618,20 +1725,12 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str) -
         opp_colors = [PARTY_BG_COLORS.get(str(row.get("Party", "")), DEFAULT_BG_COLOR) for _, row in opponent_table.iterrows()]
         sections.append((f"Opponent breakdown - {sel_party}", opponent_table, opp_colors))
 
-    winners_tbl, losers_tbl = _build_candidate_tables(ward, sel_party)
-    if not winners_tbl.empty:
-        win_colors = [_strength_color_from_value(row.get("Lead")) for _, row in winners_tbl.iterrows()]
-        sections.append((f"Winning candidates - {sel_party}", winners_tbl, win_colors))
-    if not losers_tbl.empty:
-        lose_colors = [_strength_color_from_value(row.get("Trail"), invert=True) for _, row in losers_tbl.iterrows()]
-        sections.append((f"Losing candidates - {sel_party}", losers_tbl, lose_colors))
-
     return summary_lines, sections
 
 def _generate_sections(df: pd.DataFrame, report_type: str, sel_front: str, sel_party: str) -> Tuple[List[str], List[Tuple[str, pd.DataFrame, Optional[List[str]]]]]:
     if report_type == "Assembly":
         return _generate_assembly_sections(df, sel_front, sel_party)
-    return _generate_scope_sections(df, sel_front, sel_party)
+    return _generate_scope_sections(df, sel_front, sel_party, report_type)
 
 
 def main() -> None:
