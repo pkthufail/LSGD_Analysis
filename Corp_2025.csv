@@ -1,0 +1,475 @@
+District,LBCode,LBName,WardCode,Type,WardName,Assembly
+Alappuzha,M04014,Alappuzha,M04014001,M,THUMPOLY,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014002,M,KOMMADY,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014003,M,POONTHOPPU,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014004,M,KALATHU,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014005,M,KOTTAMKULANGARA,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014006,M,PUNNAMADA,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014007,M,NEHRU TROPHY,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014008,M,THIRUMALA,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014034,M,VAZHICHERY,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014035,M,MULLACKAL,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014036,M,DISTRICT COURT,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014037,M,THATHAMPALLY,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014038,M,KARALAKAM,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014039,M,KARUKAYIL,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014040,M,AVALOOKKUNNU,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014041,M,KIDANGAMPARAMBU,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014042,M,THONDANKULANGARA,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014043,M,ASRAMAM,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014044,M,MANNAM,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014045,M,CHATHANAD,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014047,M,VADACANAL,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014048,M,POWERHOUSE,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014049,M,ARATTUVAZHI,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014050,M,KALAPPURA,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014051,M,KANJIRAMCHIRA,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014052,M,MANGALAM,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014053,M,THUMPOLY SOUTH,Alappuzha
+Alappuzha,M04014,Alappuzha,M04014009,M,PALLATHURUTHY,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014010,M,KALARKODU,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014011,M,KAITHAVANA,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014012,M,PAZHAVEEDU,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014013,M,PALACE,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014014,M,MUNICIPAL OFFICE,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014015,M,A N PURAM,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014016,M,THIRUVAMBADI,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014017,M,HOUSING COLONY,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014018,M,SANATHANAPURAM,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014019,M,ERAVUKADU,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014020,M,MULLATHU VALAPU,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014021,M,VALIYA MARAM,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014022,M,MUNICIPAL STADIUM,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014023,M,ALISSERY,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014024,M,VATTAYAL,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014025,M,KUTHIRAPANTHI,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014026,M,GURUMANDIRAM,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014027,M,VADACKAL,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014028,M,BEACH,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014029,M,RAILWAY STATION,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014030,M,VALIYAKULAM,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014031,M,LAJANETH,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014032,M,ZACHARIYA BAZAR,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014033,M,CIVIL STATION,Ambalappuzha
+Alappuzha,M04014,Alappuzha,M04014046,M,SEAVIEW,Ambalappuzha
+Ernakulam,C07003,Kochi,C07003009,C,ISLAND NORTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003010,C,RAVIPURAM,Ernakulam
+Ernakulam,C07003,Kochi,C07003011,C,ERNAKULAM SOUTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003012,C,GANDHI NAGAR,Ernakulam
+Ernakulam,C07003,Kochi,C07003013,C,KATHRIKADAVU,Ernakulam
+Ernakulam,C07003,Kochi,C07003014,C,ERNAKULAM CENTRAL,Ernakulam
+Ernakulam,C07003,Kochi,C07003015,C,ERNAKULAM NORTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003016,C,KALOOR SOUTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003017,C,KALOOR-NORTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003018,C,THRIKKANARVATTOM,Ernakulam
+Ernakulam,C07003,Kochi,C07003019,C,AYYAPPANKAVU,Ernakulam
+Ernakulam,C07003,Kochi,C07003020,C,POTTAKUZHY,Ernakulam
+Ernakulam,C07003,Kochi,C07003021,C,ELAMAKKARA SOUTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003022,C,PACHALAM,Ernakulam
+Ernakulam,C07003,Kochi,C07003023,C,THATTAZHAM,Ernakulam
+Ernakulam,C07003,Kochi,C07003024,C,VADUTHALA WEST,Ernakulam
+Ernakulam,C07003,Kochi,C07003025,C,VADUTHALA EAST,Ernakulam
+Ernakulam,C07003,Kochi,C07003026,C,ELAMAKKARA NORTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003027,C,PUTHUKKALAVATTAM,Ernakulam
+Ernakulam,C07003,Kochi,C07003028,C,KUNNUMPURAM,Ernakulam
+Ernakulam,C07003,Kochi,C07003051,C,PERUMANOOR,Ernakulam
+Ernakulam,C07003,Kochi,C07003052,C,KONTHURUTHY,Ernakulam
+Ernakulam,C07003,Kochi,C07003053,C,THEVARA,Ernakulam
+Ernakulam,C07003,Kochi,C07003054,C,ISLAND SOUTH,Ernakulam
+Ernakulam,C07003,Kochi,C07003001,C,FORT KOCHI,Kochi
+Ernakulam,C07003,Kochi,C07003002,C,KALVATHY,Kochi
+Ernakulam,C07003,Kochi,C07003003,C,EARAVELY,Kochi
+Ernakulam,C07003,Kochi,C07003004,C,KARIPPALAM,Kochi
+Ernakulam,C07003,Kochi,C07003005,C,CHERALAYI,Kochi
+Ernakulam,C07003,Kochi,C07003006,C,MATTANCHERY,Kochi
+Ernakulam,C07003,Kochi,C07003007,C,CHAKKAMADAM,Kochi
+Ernakulam,C07003,Kochi,C07003008,C,KARUVELIPPADY,Kochi
+Ernakulam,C07003,Kochi,C07003065,C,PULLARDESAM,Kochi
+Ernakulam,C07003,Kochi,C07003066,C,THAREBHAGAM,Kochi
+Ernakulam,C07003,Kochi,C07003067,C,THOPPUMPADY,Kochi
+Ernakulam,C07003,Kochi,C07003068,C,MUNDAMVELY EAST,Kochi
+Ernakulam,C07003,Kochi,C07003069,C,MUNDAMVELY,Kochi
+Ernakulam,C07003,Kochi,C07003070,C,MANASSERY,Kochi
+Ernakulam,C07003,Kochi,C07003071,C,MOOLAMKUZHY,Kochi
+Ernakulam,C07003,Kochi,C07003072,C,CHULLICKAL,Kochi
+Ernakulam,C07003,Kochi,C07003073,C,NASRATHU,Kochi
+Ernakulam,C07003,Kochi,C07003074,C,PANAYAPPILLY,Kochi
+Ernakulam,C07003,Kochi,C07003075,C,AMARAVATHY,Kochi
+Ernakulam,C07003,Kochi,C07003076,C,FORTKOCHI VELI,Kochi
+Ernakulam,C07003,Kochi,C07003029,C,PONEKKARA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003030,C,EDAPPALLY,Thrikkakara
+Ernakulam,C07003,Kochi,C07003031,C,CHANGAMPUZHA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003032,C,DHEVANKULANGARA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003033,C,PALARIVATTAM,Thrikkakara
+Ernakulam,C07003,Kochi,C07003034,C,STADIUM,Thrikkakara
+Ernakulam,C07003,Kochi,C07003035,C,KARANAKKODAM,Thrikkakara
+Ernakulam,C07003,Kochi,C07003036,C,PUTHIYAROAD,Thrikkakara
+Ernakulam,C07003,Kochi,C07003037,C,PADIVATTAM,Thrikkakara
+Ernakulam,C07003,Kochi,C07003038,C,VENNALA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003039,C,CHAKKARAPARAMBU,Thrikkakara
+Ernakulam,C07003,Kochi,C07003040,C,CHALIKKAVATTAM,Thrikkakara
+Ernakulam,C07003,Kochi,C07003041,C,THAMMANAM,Thrikkakara
+Ernakulam,C07003,Kochi,C07003042,C,ELAMKULAM,Thrikkakara
+Ernakulam,C07003,Kochi,C07003043,C,GIRINAGAR,Thrikkakara
+Ernakulam,C07003,Kochi,C07003044,C,PONNURUNNI,Thrikkakara
+Ernakulam,C07003,Kochi,C07003045,C,PONNURUNNI EAST,Thrikkakara
+Ernakulam,C07003,Kochi,C07003046,C,VYTTILA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003047,C,POONITHURA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003048,C,VYTTILA JANATHA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003049,C,KADAVANTHRA,Thrikkakara
+Ernakulam,C07003,Kochi,C07003050,C,PANAMPILLI NAGAR,Thrikkakara
+Ernakulam,C07003,Kochi,C07003055,C,KADEBHAGAM,Thrippunithara
+Ernakulam,C07003,Kochi,C07003056,C,PALLURUTHY EAST,Thrippunithara
+Ernakulam,C07003,Kochi,C07003057,C,THAZHUPPU,Thrippunithara
+Ernakulam,C07003,Kochi,C07003058,C,EADAKOCHI NORTH,Thrippunithara
+Ernakulam,C07003,Kochi,C07003059,C,EDAKOCHI SOUTH,Thrippunithara
+Ernakulam,C07003,Kochi,C07003060,C,PERUMBADAPPU,Thrippunithara
+Ernakulam,C07003,Kochi,C07003061,C,KONAM,Thrippunithara
+Ernakulam,C07003,Kochi,C07003062,C,PALLURUTHY-KACHERIPADY,Thrippunithara
+Ernakulam,C07003,Kochi,C07003063,C,NAMBYAPURAM,Thrippunithara
+Ernakulam,C07003,Kochi,C07003064,C,PALLURUTHY,Thrippunithara
+Kannur,C13006,Kannur,C13006001,C,Palliyammoola,Azheekode
+Kannur,C13006,Kannur,C13006002,C,Kunnavu,Azheekode
+Kannur,C13006,Kannur,C13006003,C,Kokkenpara,Azheekode
+Kannur,C13006,Kannur,C13006004,C,Pallikkunnu,Azheekode
+Kannur,C13006,Kannur,C13006005,C,Thalappu,Azheekode
+Kannur,C13006,Kannur,C13006006,C,Udayamkunnu,Azheekode
+Kannur,C13006,Kannur,C13006007,C,Podikundu,Azheekode
+Kannur,C13006,Kannur,C13006008,C,Kottali,Azheekode
+Kannur,C13006,Kannur,C13006009,C,Athazhakunnu,Azheekode
+Kannur,C13006,Kannur,C13006010,C,Kakkadu,Azheekode
+Kannur,C13006,Kannur,C13006011,C,Thulicheri,Azheekode
+Kannur,C13006,Kannur,C13006012,C,Kakkadu North,Azheekode
+Kannur,C13006,Kannur,C13006013,C,Shadhulipalli,Azheekode
+Kannur,C13006,Kannur,C13006055,C,Chalad,Azheekode
+Kannur,C13006,Kannur,C13006056,C,Panjikkayil,Azheekode
+Kannur,C13006,Kannur,C13006014,C,Pallipram,Kannur
+Kannur,C13006,Kannur,C13006015,C,Varam,Kannur
+Kannur,C13006,Kannur,C13006016,C,Valiyannoor,Kannur
+Kannur,C13006,Kannur,C13006017,C,Chelora,Kannur
+Kannur,C13006,Kannur,C13006018,C,Macheri,Kannur
+Kannur,C13006,Kannur,C13006019,C,Pallipoyil,Kannur
+Kannur,C13006,Kannur,C13006020,C,Kappadu,Kannur
+Kannur,C13006,Kannur,C13006021,C,Elayavoor North,Kannur
+Kannur,C13006,Kannur,C13006022,C,Elayavoor South,Kannur
+Kannur,C13006,Kannur,C13006023,C,Mundayadu,Kannur
+Kannur,C13006,Kannur,C13006024,C,Edachovva,Kannur
+Kannur,C13006,Kannur,C13006025,C,Athirakam,Kannur
+Kannur,C13006,Kannur,C13006026,C,Kappicheri,Kannur
+Kannur,C13006,Kannur,C13006027,C,Mele Chovva,Kannur
+Kannur,C13006,Kannur,C13006028,C,Thazhe Chovva,Kannur
+Kannur,C13006,Kannur,C13006029,C,Kizhuthalli,Kannur
+Kannur,C13006,Kannur,C13006030,C,Thilanoor,Kannur
+Kannur,C13006,Kannur,C13006031,C,Attadappa,Kannur
+Kannur,C13006,Kannur,C13006032,C,Chala,Kannur
+Kannur,C13006,Kannur,C13006033,C,Edakkadu,Kannur
+Kannur,C13006,Kannur,C13006034,C,Ezhara,Kannur
+Kannur,C13006,Kannur,C13006035,C,Alinkeel,Kannur
+Kannur,C13006,Kannur,C13006036,C,Keezhunna,Kannur
+Kannur,C13006,Kannur,C13006037,C,Thottada,Kannur
+Kannur,C13006,Kannur,C13006038,C,Adikadalai,Kannur
+Kannur,C13006,Kannur,C13006039,C,Kanhira,Kannur
+Kannur,C13006,Kannur,C13006040,C,Kuruva,Kannur
+Kannur,C13006,Kannur,C13006041,C,Padanna,Kannur
+Kannur,C13006,Kannur,C13006042,C,Vethilapalli,Kannur
+Kannur,C13006,Kannur,C13006043,C,Neerchal,Kannur
+Kannur,C13006,Kannur,C13006044,C,Arakkal,Kannur
+Kannur,C13006,Kannur,C13006045,C,Chovva,Kannur
+Kannur,C13006,Kannur,C13006046,C,Thana,Kannur
+Kannur,C13006,Kannur,C13006047,C,South Bazaar,Kannur
+Kannur,C13006,Kannur,C13006048,C,Temple,Kannur
+Kannur,C13006,Kannur,C13006049,C,Thayatheru,Kannur
+Kannur,C13006,Kannur,C13006050,C,Kasanakotta,Kannur
+Kannur,C13006,Kannur,C13006051,C,Ayikkara,Kannur
+Kannur,C13006,Kannur,C13006052,C,Kanathoor,Kannur
+Kannur,C13006,Kannur,C13006053,C,Payyambalam,Kannur
+Kannur,C13006,Kannur,C13006054,C,Thalikkavu,Kannur
+Kollam,C02002,Kollam,C02002001,C,SAKTHIKULANGARA HARBOUR,Chavara
+Kollam,C02002,Kollam,C02002002,C,SAKTHIKULANGARA,Chavara
+Kollam,C02002,Kollam,C02002003,C,MEENATHUCHERY,Chavara
+Kollam,C02002,Kollam,C02002004,C,KAVANAD,Chavara
+Kollam,C02002,Kollam,C02002005,C,VALLIKEEZHU,Chavara
+Kollam,C02002,Kollam,C02002054,C,ALATTUKAVU,Chavara
+Kollam,C02002,Kollam,C02002055,C,KANNIMEL WEST,Chavara
+Kollam,C02002,Kollam,C02002056,C,KANNIMEL,Chavara
+Kollam,C02002,Kollam,C02002015,C,ASRAMAM,Eravipuram
+Kollam,C02002,Kollam,C02002016,C,ULIYAKOVIL,Eravipuram
+Kollam,C02002,Kollam,C02002021,C,MANGADU,Eravipuram
+Kollam,C02002,Kollam,C02002022,C,ARUNNOOTTIMANGALAM,Eravipuram
+Kollam,C02002,Kollam,C02002023,C,CHATHINAMKULAM,Eravipuram
+Kollam,C02002,Kollam,C02002024,C,KARIKODE,Eravipuram
+Kollam,C02002,Kollam,C02002025,C,COLLEGE DIVISION,Eravipuram
+Kollam,C02002,Kollam,C02002026,C,PALKULANGARA,Eravipuram
+Kollam,C02002,Kollam,C02002027,C,AMMANNADA,Eravipuram
+Kollam,C02002,Kollam,C02002028,C,VADAKKEVILA,Eravipuram
+Kollam,C02002,Kollam,C02002029,C,PALLIMUKKU,Eravipuram
+Kollam,C02002,Kollam,C02002030,C,AYATHIL,Eravipuram
+Kollam,C02002,Kollam,C02002031,C,KILIKOLLOOR,Eravipuram
+Kollam,C02002,Kollam,C02002032,C,PUNTHALATHAZHAM,Eravipuram
+Kollam,C02002,Kollam,C02002033,C,PALATHARA,Eravipuram
+Kollam,C02002,Kollam,C02002034,C,MANACADU,Eravipuram
+Kollam,C02002,Kollam,C02002035,C,KOLLOORVILA,Eravipuram
+Kollam,C02002,Kollam,C02002036,C,KAYYALAKKAL,Eravipuram
+Kollam,C02002,Kollam,C02002037,C,VALATHUNGAL,Eravipuram
+Kollam,C02002,Kollam,C02002038,C,AKKOLIL,Eravipuram
+Kollam,C02002,Kollam,C02002039,C,THEKKUMBHAGAM,Eravipuram
+Kollam,C02002,Kollam,C02002040,C,ERAVIPUARAM,Eravipuram
+Kollam,C02002,Kollam,C02002041,C,BHARANIKKAVU,Eravipuram
+Kollam,C02002,Kollam,C02002042,C,THEKKEVILA,Eravipuram
+Kollam,C02002,Kollam,C02002006,C,KUREEPUZHA WEST,Kollam
+Kollam,C02002,Kollam,C02002007,C,KUREEPUZHA,Kollam
+Kollam,C02002,Kollam,C02002008,C,NEERAVIL,Kollam
+Kollam,C02002,Kollam,C02002009,C,ANCHALUMMOODU WEST,Kollam
+Kollam,C02002,Kollam,C02002010,C,ANCHALUMMOODU EAST,Kollam
+Kollam,C02002,Kollam,C02002011,C,KADAVOOR,Kollam
+Kollam,C02002,Kollam,C02002012,C,MATHILIL,Kollam
+Kollam,C02002,Kollam,C02002013,C,THEVALLY,Kollam
+Kollam,C02002,Kollam,C02002014,C,VADAKKUMBHAGAM,Kollam
+Kollam,C02002,Kollam,C02002017,C,ULIYAKOVIL EAST,Kollam
+Kollam,C02002,Kollam,C02002018,C,KADAPPAKADA,Kollam
+Kollam,C02002,Kollam,C02002019,C,KOYIKKAL,Kollam
+Kollam,C02002,Kollam,C02002020,C,KALLUMTHAZHAM,Kollam
+Kollam,C02002,Kollam,C02002043,C,MUNDAKKAL,Kollam
+Kollam,C02002,Kollam,C02002044,C,PATTATHANAM,Kollam
+Kollam,C02002,Kollam,C02002045,C,CONTONMENT,Kollam
+Kollam,C02002,Kollam,C02002046,C,UDAYAMARTHANDAPUARAM,Kollam
+Kollam,C02002,Kollam,C02002047,C,THAMARAKULAM,Kollam
+Kollam,C02002,Kollam,C02002048,C,PORT,Kollam
+Kollam,C02002,Kollam,C02002049,C,KAIKULANGARA,Kollam
+Kollam,C02002,Kollam,C02002050,C,CUTCHERY,Kollam
+Kollam,C02002,Kollam,C02002051,C,THANGASSERY,Kollam
+Kollam,C02002,Kollam,C02002052,C,THIRUMULLAVARAM,Kollam
+Kollam,C02002,Kollam,C02002053,C,MULANKADAKAM,Kollam
+Kozhikode,C11005,Kozhikkode,C11005041,C,AREEKKAD NORTH,Beypore
+Kozhikode,C11005,Kozhikkode,C11005042,C,AREEKKAD,Beypore
+Kozhikode,C11005,Kozhikkode,C11005043,C,NALLALAM,Beypore
+Kozhikode,C11005,Kozhikkode,C11005044,C,KOLATHARA,Beypore
+Kozhikode,C11005,Kozhikkode,C11005045,C,KUNDAYITHODE,Beypore
+Kozhikode,C11005,Kozhikkode,C11005046,C,CHERUVANNUR EAST,Beypore
+Kozhikode,C11005,Kozhikkode,C11005047,C,CHERUVANNUR WEST,Beypore
+Kozhikode,C11005,Kozhikkode,C11005048,C,BEYPUR PORT,Beypore
+Kozhikode,C11005,Kozhikkode,C11005049,C,BEYPUR,Beypore
+Kozhikode,C11005,Kozhikkode,C11005050,C,MARADU,Beypore
+Kozhikode,C11005,Kozhikkode,C11005051,C,NADUVATTAM,Beypore
+Kozhikode,C11005,Kozhikkode,C11005052,C,NADUVATTAM EAST,Beypore
+Kozhikode,C11005,Kozhikkode,C11005053,C,ARAKKINAR,Beypore
+Kozhikode,C11005,Kozhikkode,C11005054,C,MATHOTTAM,Beypore
+Kozhikode,C11005,Kozhikkode,C11005001,C,ELATHUR,Elathur
+Kozhikode,C11005,Kozhikkode,C11005002,C,CHETTIKULAM,Elathur
+Kozhikode,C11005,Kozhikkode,C11005003,C,ERANHIKKAL,Elathur
+Kozhikode,C11005,Kozhikkode,C11005004,C,PUTHUR,Elathur
+Kozhikode,C11005,Kozhikkode,C11005005,C,MOKAVUR,Elathur
+Kozhikode,C11005,Kozhikkode,C11005006,C,KUNDOOPARAMB,Elathur
+Kozhikode,C11005,Kozhikkode,C11005076,C,PUTHIYAPPA,Elathur
+Kozhikode,C11005,Kozhikkode,C11005007,C,KARUVISSERY,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005008,C,MALAPPARAMB,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005009,C,THADAMBATTU THAZHAM,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005010,C,VENGERI,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005011,C,POOLAKKADAVU,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005012,C,PAROPPADI,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005013,C,CIVIL STATION,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005014,C,CHEVARAMBALAM,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005015,C,VELLIMADUKUNNU,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005016,C,MOOZHIKKAL,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005017,C,CHELAVOOR,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005018,C,MAYANAD,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005019,C,MEDICAL COLLEGE SOUTH,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005020,C,MEDICAL COLLEGE,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005062,C,MAVOOR ROAD,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005063,C,MOONNALINGAL,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005064,C,THIRUTHIYAD,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005065,C,ERANHIPPALAM,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005066,C,NADAKKAVU,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005067,C,VELLAYIL,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005068,C,THOPPAYIL,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005069,C,CHAKKAROTHUKULAM,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005070,C,KARAPPARAMB,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005071,C,EAST HILL,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005072,C,ATHANIKKAL,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005073,C,WESTHILL,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005074,C,EDAKKAD,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005075,C,PUTHIYANGADI,Kozhikode North
+Kozhikode,C11005,Kozhikkode,C11005021,C,CHEVAYUR,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005022,C,KOVOOR,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005023,C,NELLIKKODE,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005024,C,KUDILTHODU,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005025,C,KOTTOOLI,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005026,C,PARAYANCHERI,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005027,C,PUTHIYARA,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005028,C,KUTHIRAVATTAM,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005029,C,POTTAMMAL,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005030,C,KOMMERI,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005031,C,KUTTIYIL THAZHAM,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005032,C,METHOTTU THAZHAM,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005033,C,POKKUNNU,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005034,C,KINASSERY,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005035,C,MANKAVU,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005036,C,AYCHAVATTAM,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005037,C,KALLAI,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005038,C,PANNIYANKARA,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005039,C,MEENCHANTHA,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005040,C,THIRUVANNUR,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005055,C,PAYYANAKKAL,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005056,C,NADI NAGAR,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005057,C,CHAKKUMKADAVU,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005058,C,MUKHADAR,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005059,C,KUTTICHIRA,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005060,C,CHALAPPURAM,Kozhikode South
+Kozhikode,C11005,Kozhikkode,C11005061,C,PALAYAM,Kozhikode South
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001001,C,KAZHAKKUTTOM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001002,C,SAINIKA SCHOOL,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001003,C,CHANTHAVILA,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001004,C,KATTAIKONAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001005,C,NJANDOORKONAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001006,C,POWDIKONAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001007,C,CHENKOTTUKONAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001008,C,CHEMPAZHANTHY,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001009,C,KARIAVATTOM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001010,C,PANGAPPARA,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001011,C,SREEKARIYAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001012,C,CHELLAMANGALAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001013,C,MANNANTHALA,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001031,C,EDAVACODE,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001032,C,ULLOOR,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001091,C,KARIKKAKAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001092,C,KADAKAMPALLY,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001093,C,ANAMUGHAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001094,C,AKKULAM,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001095,C,CHERUVAIKKAL,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001096,C,ALATHARA,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001097,C,KUZHIVILA,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001098,C,POUNDKADAVU,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001099,C,KULATHOOR,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001100,C,ATTIPRA,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001101,C,PALLITHURA,Kazhakkoottam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001064,C,VENGANOOR,Kovalam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001065,C,PORT WARD,Kovalam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001066,C,VIZHINJAM,Kovalam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001067,C,HARBOUR,Kovalam
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001043,C,THIRUMALA,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001045,C,THRIKKANNAPURAM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001046,C,PUNNAKKAMUGAL,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001047,C,POOJAPPURA,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001052,C,MUDAVANMUGAL,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001053,C,ESTATE,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001054,C,NEMOM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001055,C,PONNUMANGALAM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001056,C,MELAMCODE,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001057,C,PAPPANAMCODE,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001058,C,KARAMANA,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001059,C,NEDUMCAUD,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001060,C,KALADI,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001061,C,KARUMOM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001062,C,PUNCHAKKARI,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001063,C,POONKULAM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001068,C,VELLAR,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001069,C,THIRUVALLAM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001072,C,AMBALATHARA,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001073,C,ATTUKAL,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001074,C,KALIPPANKULAM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001075,C,KAMALESWARAM,Nemom
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001039,C,PALAYAM,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001040,C,VAZHUTHACAUD,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001044,C,VALIYAVILA,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001048,C,JAGATHY,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001049,C,THYCAUD,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001050,C,VALIYASALA,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001051,C,ARANNOOR,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001070,C,POONTHURA,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001071,C,PUTHENPPALLI,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001076,C,BEEMAPALLI,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001077,C,VALIYATHURA,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001078,C,VALLAKKADAVU,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001079,C,SREEVARAHAM,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001080,C,MANACAUD,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001081,C,CHALAI,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001082,C,FORT,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001083,C,PERUNTHANNI,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001084,C,SREEKANTESWARAM,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001085,C,THAMPANOOR,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001086,C,VANCHIYOOR,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001088,C,PETTAH,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001089,C,CHACKAI,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001090,C,VETTUKADU,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001014,C,PATHIRAPALLI,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001015,C,AMBALAMUKKU,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001016,C,KUDAPPANAKUNNU,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001017,C,THURUTHUMMOOLA,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001018,C,NETTAYAM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001019,C,KACHANI,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001020,C,VAZHOTTUKONAM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001021,C,KODUNGANOOR,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001022,C,VATTIYOORKAVU,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001023,C,KANJIRAMPARA,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001024,C,PEROORKADA,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001025,C,KOWDIAR,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001026,C,KURAVANKONAM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001027,C,MUTTADA,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001028,C,CHETTIVILAKAM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001029,C,KINAVOOR,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001030,C,NALANCHIRA,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001033,C,MEDICAL COLLEGE,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001034,C,PATTOM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001035,C,KESAVADASAPURAM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001036,C,GOWREESHAPATTOM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001037,C,KUNNUKUZHY,Thiruvananthapuram
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001038,C,NANTHANCODE,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001041,C,SASTHAMANGALAM,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001042,C,PANGODE,Vattiyoorkavu
+Thiruvananthapuram,C01001,Thiruvananthapuram,C01001087,C,KANNAMMOOLA,Vattiyoorkavu
+Thrissur,C08004,Thrissur,C08004013,C,MULLAKKARA,Ollur
+Thrissur,C08004,Thrissur,C08004014,C,MANNUTHY,Ollur
+Thrissur,C08004,Thrissur,C08004024,C,KURIACHIRA,Ollur
+Thrissur,C08004,Thrissur,C08004025,C,VALARKAVU,Ollur
+Thrissur,C08004,Thrissur,C08004026,C,ANCHERY,Ollur
+Thrissur,C08004,Thrissur,C08004027,C,PADAVARADU,Ollur
+Thrissur,C08004,Thrissur,C08004028,C,OLLUR CENTRE,Ollur
+Thrissur,C08004,Thrissur,C08004029,C,EDAKKUNNY,Ollur
+Thrissur,C08004,Thrissur,C08004030,C,THAIKATTUSSERY,Ollur
+Thrissur,C08004,Thrissur,C08004031,C,OLLUR,Ollur
+Thrissur,C08004,Thrissur,C08004033,C,CHIYYARAM SOUTH,Ollur
+Thrissur,C08004,Thrissur,C08004034,C,KURIYACHIRA WEST,Ollur
+Thrissur,C08004,Thrissur,C08004042,C,KOORKANCHERY,Ollur
+Thrissur,C08004,Thrissur,C08004043,C,KANIMANGALAM,Ollur
+Thrissur,C08004,Thrissur,C08004044,C,PANAMUKKU,Ollur
+Thrissur,C08004,Thrissur,C08004045,C,NEDUPUZHA,Ollur
+Thrissur,C08004,Thrissur,C08004001,C,POONKUNNAM,Thrissur
+Thrissur,C08004,Thrissur,C08004002,C,KUTTANKULANGARA,Thrissur
+Thrissur,C08004,Thrissur,C08004003,C,PATTURAIKAL,Thrissur
+Thrissur,C08004,Thrissur,C08004004,C,VIYYUR,Thrissur
+Thrissur,C08004,Thrissur,C08004005,C,PERINGAVU,Thrissur
+Thrissur,C08004,Thrissur,C08004006,C,RAMAVARMAPURAM,Thrissur
+Thrissur,C08004,Thrissur,C08004007,C,KUTTUMUKKU,Thrissur
+Thrissur,C08004,Thrissur,C08004008,C,VILLADAM,Thrissur
+Thrissur,C08004,Thrissur,C08004009,C,CHEROOR,Thrissur
+Thrissur,C08004,Thrissur,C08004010,C,GANDHI NAGAR,Thrissur
+Thrissur,C08004,Thrissur,C08004011,C,MUKKATTUKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004012,C,NETTISSERY,Thrissur
+Thrissur,C08004,Thrissur,C08004015,C,OLLUKKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004016,C,KRISHNAPURAM,Thrissur
+Thrissur,C08004,Thrissur,C08004017,C,KUTTANELLUR,Thrissur
+Thrissur,C08004,Thrissur,C08004018,C,CHELAKKOTTUKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004019,C,KALATHODE,Thrissur
+Thrissur,C08004,Thrissur,C08004020,C,PARAVATTANY,Thrissur
+Thrissur,C08004,Thrissur,C08004021,C,KIZHAKKUMPATTUKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004022,C,CHEMBUKAVU,Thrissur
+Thrissur,C08004,Thrissur,C08004023,C,MISSION QUARTERS,Thrissur
+Thrissur,C08004,Thrissur,C08004032,C,CHIYYARAM,Thrissur
+Thrissur,C08004,Thrissur,C08004035,C,KANNAMKULANGARA,Thrissur
+Thrissur,C08004,Thrissur,C08004036,C,THEKKINKADU,Thrissur
+Thrissur,C08004,Thrissur,C08004037,C,THIRUVAMBADI,Thrissur
+Thrissur,C08004,Thrissur,C08004038,C,KOTTAPPURAM,Thrissur
+Thrissur,C08004,Thrissur,C08004039,C,POOTHOLE,Thrissur
+Thrissur,C08004,Thrissur,C08004040,C,KOKKALAI,Thrissur
+Thrissur,C08004,Thrissur,C08004041,C,VADOOKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004046,C,KARIATTUKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004047,C,LALOOR,Thrissur
+Thrissur,C08004,Thrissur,C08004048,C,ARANATTUKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004049,C,KANATTUKARA,Thrissur
+Thrissur,C08004,Thrissur,C08004050,C,AYYANTHOLE,Thrissur
+Thrissur,C08004,Thrissur,C08004051,C,CIVIL STATION,Thrissur
+Thrissur,C08004,Thrissur,C08004052,C,OLARI,Thrissur
+Thrissur,C08004,Thrissur,C08004053,C,ELTHURUTH,Thrissur
+Thrissur,C08004,Thrissur,C08004054,C,CHETTUPUZHA,Thrissur
+Thrissur,C08004,Thrissur,C08004055,C,PULLAZHI,Thrissur
+Thrissur,C08004,Thrissur,C08004056,C,PUTHOORKARA,Thrissur

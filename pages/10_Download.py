@@ -936,6 +936,245 @@ def _build_candidate_tables(df: pd.DataFrame, sel_party: str) -> Tuple[pd.DataFr
 
     return winners_tbl, losers_tbl
 
+
+def _build_front_other_candidate_tables(
+    df: pd.DataFrame, sel_front: str, sel_party: str
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Build tables for candidates from other parties within the selected front:
+    - Winners (rank == 1)
+    - Losers (rank != 1)
+    Returns (winners_other_tbl, losers_other_tbl)
+    """
+    if df.empty or "Rank" not in df.columns:
+        empty_cols_win = ["Party", "LBName", "Ward", "Candidate", "Votes", "Vote share (%)", "Lead", "Runner Party"]
+        empty_cols_lose = [
+            "Party",
+            "LBName",
+            "Ward",
+            "Candidate",
+            "Votes",
+            "Vote share (%)",
+            "Trail",
+            "Winner Party",
+            "Position",
+        ]
+        return pd.DataFrame(columns=empty_cols_win), pd.DataFrame(columns=empty_cols_lose)
+
+    tmp = df.copy()
+    tmp["Rank"] = pd.to_numeric(tmp.get("Rank"), errors="coerce").astype("Int64")
+    tmp = tmp[tmp["Rank"].notna()]
+    if tmp.empty:
+        empty_cols_win = ["Party", "LBName", "Ward", "Candidate", "Votes", "Vote share (%)", "Lead", "Runner Party"]
+        empty_cols_lose = [
+            "Party",
+            "LBName",
+            "Ward",
+            "Candidate",
+            "Votes",
+            "Vote share (%)",
+            "Trail",
+            "Winner Party",
+            "Position",
+        ]
+        return pd.DataFrame(columns=empty_cols_win), pd.DataFrame(columns=empty_cols_lose)
+
+    # Candidates from the selected front but NOT the selected party
+    front_mask = tmp.get("Front", "").astype(str) == str(sel_front)
+    party_mask = tmp.get("Party", "").astype(str) != str(sel_party)
+    in_front_other = tmp[front_mask & party_mask].copy()
+
+    if in_front_other.empty:
+        empty_cols_win = ["Party", "LBName", "Ward", "Candidate", "Votes", "Vote share (%)", "Lead", "Runner Party"]
+        empty_cols_lose = [
+            "Party",
+            "LBName",
+            "Ward",
+            "Candidate",
+            "Votes",
+            "Vote share (%)",
+            "Trail",
+            "Winner Party",
+            "Position",
+        ]
+        return pd.DataFrame(columns=empty_cols_win), pd.DataFrame(columns=empty_cols_lose)
+
+    keys = _ward_join_keys(in_front_other)
+    # Totals must be computed across ALL candidates in the ward, not just the subset
+    totals_all = tmp.groupby(keys, dropna=False)["Votes"].sum().rename("TotalVotes").reset_index()
+
+    # Winners (rank == 1) from other parties in the selected front
+    win_mask = in_front_other["Rank"] == 1
+    winners = in_front_other[win_mask].copy()
+    runner_cols = keys + ["Party", "Candidate", "Votes"]
+    runners_any = (
+        tmp[pd.to_numeric(tmp.get("Rank"), errors="coerce") == 2][runner_cols]
+        .rename(columns={"Party": "RunnerParty", "Candidate": "RunnerCandidate", "Votes": "RunnerVotes"})
+    )
+    winners = winners.merge(totals_all, on=keys, how="left").merge(runners_any, on=keys, how="left")
+    winners["Lead"] = pd.to_numeric(winners.get("Lead"), errors="coerce")
+    winners["Lead"] = winners["Lead"].fillna(
+        pd.to_numeric(winners.get("Votes"), errors="coerce").fillna(0)
+        - pd.to_numeric(winners.get("RunnerVotes"), errors="coerce").fillna(0)
+    )
+    winners["Vote share (%)"] = np.where(
+        pd.to_numeric(winners.get("TotalVotes"), errors="coerce").fillna(0) > 0,
+        pd.to_numeric(winners.get("Votes"), errors="coerce").fillna(0)
+        / pd.to_numeric(winners.get("TotalVotes"), errors="coerce").replace(0, np.nan)
+        * 100,
+        0.0,
+    )
+
+    winners_tbl = pd.DataFrame(
+        {
+            "Party": winners.get("Party", pd.Series(index=winners.index)).astype(str),
+            "LBName": winners.get("LBName", pd.Series(index=winners.index)).astype(str)
+            if "LBName" in winners.columns
+            else pd.Series("-", index=winners.index),
+            "Ward": winners.get("WardName", winners.get("WardNo", pd.Series(index=winners.index))).astype(str),
+            "Candidate": winners.get("Candidate", pd.Series(index=winners.index)).astype(str),
+            "Votes": pd.to_numeric(winners.get("Votes"), errors="coerce").fillna(0).astype(int),
+            "Vote share (%)": pd.to_numeric(winners.get("Vote share (%)"), errors="coerce").fillna(0.0).round(2),
+            "Lead": pd.to_numeric(winners.get("Lead"), errors="coerce").fillna(0).round(0).astype(int),
+            "Runner Party": winners.get("RunnerParty", pd.Series("-", index=winners.index)).fillna("-"),
+        }
+    )
+    winners_tbl = winners_tbl.sort_values("Lead", ascending=False).reset_index(drop=True)
+
+    # Losers (rank != 1) from other parties in the selected front
+    lose_mask = in_front_other["Rank"] != 1
+    losers = in_front_other[lose_mask].copy()
+
+    winners_any = (
+        tmp[pd.to_numeric(tmp.get("Rank"), errors="coerce") == 1][runner_cols]
+        .rename(columns={"Party": "WinnerParty", "Candidate": "WinnerCandidate", "Votes": "WinnerVotes"})
+    )
+    losers = losers.merge(totals_all, on=keys, how="left").merge(winners_any, on=keys, how="left")
+    losers["Trail"] = (
+        pd.to_numeric(losers.get("WinnerVotes"), errors="coerce").fillna(0)
+        - pd.to_numeric(losers.get("Votes"), errors="coerce").fillna(0)
+    )
+    losers["Vote share (%)"] = np.where(
+        pd.to_numeric(losers.get("TotalVotes"), errors="coerce").fillna(0) > 0,
+        pd.to_numeric(losers.get("Votes"), errors="coerce").fillna(0)
+        / pd.to_numeric(losers.get("TotalVotes"), errors="coerce").replace(0, np.nan)
+        * 100,
+        0.0,
+    )
+
+    losers_tbl = pd.DataFrame(
+        {
+            "Party": losers.get("Party", pd.Series(index=losers.index)).astype(str),
+            "LBName": losers.get("LBName", pd.Series(index=losers.index)).astype(str)
+            if "LBName" in losers.columns
+            else pd.Series("-", index=losers.index),
+            "Ward": losers.get("WardName", losers.get("WardNo", pd.Series(index=losers.index))).astype(str),
+            "Candidate": losers.get("Candidate", pd.Series(index=losers.index)).astype(str),
+            "Votes": pd.to_numeric(losers.get("Votes"), errors="coerce").fillna(0).astype(int),
+            "Vote share (%)": pd.to_numeric(losers.get("Vote share (%)"), errors="coerce").fillna(0.0).round(2),
+            "Trail": pd.to_numeric(losers.get("Trail"), errors="coerce").fillna(0).round(0).astype(int),
+            "Winner Party": losers.get("WinnerParty", pd.Series("-", index=losers.index)).fillna("-"),
+            "Position": pd.to_numeric(losers.get("Rank"), errors="coerce").astype("Int64"),
+        }
+    )
+    losers_tbl = losers_tbl.sort_values("Trail", ascending=False).reset_index(drop=True)
+
+    return winners_tbl, losers_tbl
+
+
+def _build_wards_not_contested_by_front(df: pd.DataFrame, sel_front: str) -> pd.DataFrame:
+    """
+    List wards within scope where the selected front had no candidate.
+    Output columns: Ward Name, Winning Party, Candidate Name, Votes, Vote share (%), Lead, Runner Party
+    """
+    if df.empty:
+        return pd.DataFrame(
+            columns=[
+                "Ward Name",
+                "Winning Party",
+                "Candidate Name",
+                "Votes",
+                "Vote share (%)",
+                "Lead",
+                "Runner Party",
+            ]
+        )
+
+    tmp = df.copy()
+    keys = _ward_join_keys(tmp)
+    if not keys:
+        return pd.DataFrame(
+            columns=[
+                "Ward Name",
+                "Winning Party",
+                "Candidate Name",
+                "Votes",
+                "Vote share (%)",
+                "Lead",
+                "Runner Party",
+            ]
+        )
+
+    # Flags for presence of selected front in each ward
+    tmp["Front"] = tmp.get("Front", "").astype(str)
+    any_sel_front = (
+        tmp.assign(_flag=(tmp["Front"] == str(sel_front)))
+        .groupby(keys, dropna=False)["_flag"].any()
+        .rename("HasSelFront")
+        .reset_index()
+    )
+    # Winners, runners, totals per ward (across all parties)
+    tmp["Rank"] = pd.to_numeric(tmp.get("Rank"), errors="coerce").astype("Int64")
+    winners = tmp[tmp["Rank"] == 1].copy()
+    runners = tmp[tmp["Rank"] == 2].copy()
+    totals = tmp.groupby(keys, dropna=False)["Votes"].sum().rename("TotalVotes").reset_index()
+
+    # Select meta columns for labels
+    label_cols = [c for c in ["LBName", "WardName", "WardNo"] if c in tmp.columns]
+    meta = tmp[keys + label_cols].drop_duplicates(subset=keys)
+
+    # Merge to compute final table for wards without selected front
+    merged = any_sel_front.merge(winners[keys + ["Party", "Candidate", "Votes"]], on=keys, how="left")
+    merged = merged.merge(runners[keys + ["Party", "Candidate", "Votes"]], on=keys, how="left", suffixes=("", "_Runner"))
+    merged = merged.merge(totals, on=keys, how="left").merge(meta, on=keys, how="left")
+    not_contested = merged[~merged["HasSelFront"]].copy()
+
+    if not not_contested.empty:
+        # Ward label resolution
+        ward_label = not_contested.get("WardName", not_contested.get("WardNo", pd.Series(index=not_contested.index))).astype(str)
+        votes = pd.to_numeric(not_contested.get("Votes"), errors="coerce").fillna(0)
+        total_votes = pd.to_numeric(not_contested.get("TotalVotes"), errors="coerce")
+        runner_votes = pd.to_numeric(not_contested.get("Votes_Runner"), errors="coerce").fillna(0)
+        # Compute share as pandas Series to keep fillna available
+        share = (votes / total_votes.replace(0, np.nan) * 100.0).fillna(0.0)
+        lead = (votes - runner_votes).round(0).astype(int)
+
+        out = pd.DataFrame(
+            {
+                "Ward Name": ward_label,
+                "Winning Party": not_contested.get("Party", pd.Series("-", index=not_contested.index)).fillna("-").astype(str),
+                "Candidate Name": not_contested.get("Candidate", pd.Series("-", index=not_contested.index)).fillna("-").astype(str),
+                "Votes": votes.astype(int),
+                "Vote share (%)": share.round(2),
+                "Lead": lead,
+                "Runner Party": not_contested.get("Party_Runner", pd.Series("-", index=not_contested.index)).fillna("-").astype(str),
+            }
+        )
+        out = out.sort_values(["Lead", "Ward Name"], ascending=[False, True]).reset_index(drop=True)
+        return out
+
+    return pd.DataFrame(
+        columns=[
+            "Ward Name",
+            "Winning Party",
+            "Candidate Name",
+            "Votes",
+            "Vote share (%)",
+            "Lead",
+            "Runner Party",
+        ]
+    )
+
 def _format_cell(value: object) -> str:
     if isinstance(value, pd.Series):
         value = value.iloc[0]
@@ -1395,7 +1634,20 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
     summary_lines = _build_summary_lines(ward, sel_front, sel_party, include_majority=False)
     sections: List[Tuple] = []
 
-    summary_result = summary_by_lb(ward, LB_WARD_COUNTS)
+    # Pass Wards_2025 and explicit Assembly/District to compute assembly-filtered 2025 counts for the summary
+    w25_df = load_wards_2025()
+    asm_name = None
+    for c in ["Assembly", "ACName", "AssemblyName", "Constituency"]:
+        if c in df.columns:
+            vals = df[c].dropna().astype(str).unique().tolist()
+            asm_name = str(vals[0]).strip() if vals else None
+            break
+    if "District" in df.columns:
+        dvals = df["District"].dropna().astype(str).unique().tolist()
+        district_name = str(dvals[0]).strip() if dvals else None
+    else:
+        district_name = None
+    summary_result = summary_by_lb(ward, LB_WARD_COUNTS, wards_2025=w25_df, assembly=asm_name, district=district_name)
     summary_table = getattr(summary_result, "frame", pd.DataFrame())
     if not summary_table.empty:
         summary_table = summary_table.rename(
@@ -1709,9 +1961,30 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str, r
         if not winners_tbl.empty:
             win_colors = [_strength_color_from_value(row.get("Lead")) for _, row in winners_tbl.iterrows()]
             sections.append((f"Winning candidates - {sel_party}", winners_tbl, win_colors))
+            # Local Body: also include winners by other parties in the selected front
+            if (report_type or "").lower() == "local body":
+                other_win_tbl, _ = _build_front_other_candidate_tables(ward, sel_front, sel_party)
+                if not other_win_tbl.empty:
+                    other_win_colors = [
+                        _strength_color_from_value(row.get("Lead")) for _, row in other_win_tbl.iterrows()
+                    ]
+                    sections.append((f"Winning candidates - other parties in {sel_front}", other_win_tbl, other_win_colors))
         if not losers_tbl.empty:
             lose_colors = [_strength_color_from_value(row.get("Trail"), invert=True) for _, row in losers_tbl.iterrows()]
             sections.append((f"Losing candidates - {sel_party}", losers_tbl, lose_colors))
+            # Local Body: also include losing candidates of other parties from the selected front
+            if (report_type or "").lower() == "local body":
+                _, other_lose_tbl = _build_front_other_candidate_tables(ward, sel_front, sel_party)
+                if not other_lose_tbl.empty:
+                    other_lose_colors = [
+                        _strength_color_from_value(row.get("Trail"), invert=True) for _, row in other_lose_tbl.iterrows()
+                    ]
+                    sections.append((f"Losing candidates - other parties in {sel_front}", other_lose_tbl, other_lose_colors))
+        # Local Body: list wards where the selected front did not contest
+        if (report_type or "").lower() == "local body":
+            not_contested_tbl = _build_wards_not_contested_by_front(ward, sel_front)
+            if not not_contested_tbl.empty:
+                sections.append((f"Wards not contested by {sel_front}", not_contested_tbl, None))
 
     # Opponent breakdown always included
     opponent_table = _build_opponent_table(ward, sel_party)
@@ -1724,6 +1997,25 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str, r
         )
         opp_colors = [PARTY_BG_COLORS.get(str(row.get("Party", "")), DEFAULT_BG_COLOR) for _, row in opponent_table.iterrows()]
         sections.append((f"Opponent breakdown - {sel_party}", opponent_table, opp_colors))
+
+    # For Local Body reports, drop LBName column from all tables
+    if (report_type or "").lower() == "local body":
+        new_sections: List[Tuple] = []
+        for section in sections:
+            if isinstance(section, tuple) and len(section) in (3, 4):
+                title = section[0]
+                df = section[1]
+                row_colors = section[2]
+                chart_bytes = section[3] if len(section) == 4 else None
+                if isinstance(df, pd.DataFrame) and not df.empty and "LBName" in df.columns:
+                    df = df.drop(columns=["LBName"], errors="ignore")
+                if chart_bytes is not None:
+                    new_sections.append((title, df, row_colors, chart_bytes))
+                else:
+                    new_sections.append((title, df, row_colors))
+            else:
+                new_sections.append(section)
+        sections = new_sections
 
     return summary_lines, sections
 
@@ -1860,17 +2152,41 @@ def main() -> None:
             seats_2020_total = int(len(wards_unique))
         else:
             seats_2020_total = int(len(ward_scope))
-        # Compute 2025 seats by summing wards_2025 for LB codes within scope
-        lb_codes = ward_scope.get("LBCode")
-        if lb_codes is not None:
-            codes = [str(c).strip() for c in lb_codes.dropna().astype(str).unique().tolist()]
-        else:
-            codes = []
+        # Compute 2025 seats based on Wards_2025 filtered to the selected Assembly
         seats_2025_total = 0
-        for code in codes:
-            info = LB_WARD_COUNTS.get(code)
-            if info and isinstance(info.get("wards_2025"), (int, float)):
-                seats_2025_total += int(info.get("wards_2025", 0))
+        try:
+            w25 = wards_2025_df if 'wards_2025_df' in locals() else load_wards_2025()
+        except Exception:
+            w25 = None
+        if isinstance(w25, pd.DataFrame) and not w25.empty and 'Assembly' in w25.columns:
+            w25f = w25.copy()
+            # Normalize string columns
+            for c in ['Assembly', 'WardCode', 'District']:
+                if c in w25f.columns:
+                    w25f[c] = w25f[c].astype(str).str.strip()
+            asm_key = str(asm_name).strip().upper()
+            mask = w25f['Assembly'].astype(str).str.strip().str.upper() == asm_key
+            # Optional: also constrain by selected District if present in both scope and data
+            district = str(scope.get('District') or '').strip()
+            if district and 'District' in w25f.columns and district not in {'All', 'All Kerala'}:
+                dist_key = str(district).strip().upper()
+                mask &= (w25f['District'].astype(str).str.strip().str.upper() == dist_key)
+            w25f = w25f[mask]
+            if 'WardCode' in w25f.columns:
+                seats_2025_total = int(w25f['WardCode'].astype(str).nunique())
+            else:
+                seats_2025_total = int(len(w25f))
+        else:
+            # Fallback to LB-based lookup if Wards_2025 not available or lacks Assembly
+            lb_codes = ward_scope.get("LBCode")
+            if lb_codes is not None:
+                codes = [str(c).strip() for c in lb_codes.dropna().astype(str).unique().tolist()]
+            else:
+                codes = []
+            for code in codes:
+                info = LB_WARD_COUNTS.get(code)
+                if info and isinstance(info.get("wards_2025"), (int, float)):
+                    seats_2025_total += int(info.get("wards_2025", 0))
         # Fallback if nothing was found
         if seats_2025_total == 0:
             seats_2025_total = seats_2020_total

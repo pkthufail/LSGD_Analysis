@@ -10,6 +10,7 @@ import html
 import re
 
 from lib.colors import FRONT_BG_COLORS, FRONT_COLORS, PARTY_BG_COLORS, PARTY_COLORS, DEFAULT_BG_COLOR
+from lib.data import load_wards_2025
 
 WINNING_WARD_COLOR = "#2e7d32"
 LOSING_WARD_COLOR = "#c62828"
@@ -119,7 +120,14 @@ def _partition_scope(df: pd.DataFrame) -> Tuple[pd.DataFrame, float]:
     return data, float(votes.sum())
 
 
-def summary_by_lb(df: pd.DataFrame, lb_counts: Dict[str, Dict[str, int]]) -> TableResult:
+def summary_by_lb(
+    df: pd.DataFrame,
+    lb_counts: Dict[str, Dict[str, int]],
+    *,
+    wards_2025: Optional[pd.DataFrame] = None,
+    assembly: Optional[str] = None,
+    district: Optional[str] = None,
+) -> TableResult:
     scoped, _ = _partition_scope(df)
     if scoped.empty:
         empty = pd.DataFrame(columns=["LBName", "Wards (2020)", "Wards (2025)", "New Wards", "Total Votes"])
@@ -129,15 +137,53 @@ def summary_by_lb(df: pd.DataFrame, lb_counts: Dict[str, Dict[str, int]]) -> Tab
     wards_2020 = group["WardCode"].nunique().rename("Wards (2020)")
     votes = group["Votes"].sum().rename("Total Votes")
 
+    # Determine assembly/district from df if not provided
+    if assembly is None:
+        for c in ["Assembly", "ACName", "AssemblyName", "Constituency"]:
+            if c in scoped.columns:
+                vals = scoped[c].dropna().astype(str).unique().tolist()
+                if len(vals) == 1:
+                    assembly = vals[0]
+                    break
+    if district is None and "District" in scoped.columns:
+        vals = scoped["District"].dropna().astype(str).unique().tolist()
+        if len(vals) == 1:
+            district = vals[0]
+
+    # Build 2025 ward counts per LBCode filtered by assembly (and district if present),
+    # falling back to lb_counts if wards_2025 is unavailable or lacks Assembly.
+    counts_2025_by_lb: Dict[str, int] = {}
+    try:
+        w25 = wards_2025 if wards_2025 is not None else load_wards_2025()
+    except Exception:
+        w25 = None
+    if isinstance(w25, pd.DataFrame) and not w25.empty and "LBCode" in w25.columns and "WardCode" in w25.columns and "Assembly" in w25.columns and assembly:
+        filt = w25.copy()
+        for c in ["LBCode", "WardCode", "Assembly", "District"]:
+            if c in filt.columns:
+                filt[c] = filt[c].astype(str).str.strip()
+        asm_key = str(assembly).strip().upper()
+        mask = filt["Assembly"].astype(str).str.strip().str.upper() == asm_key
+        if district and "District" in filt.columns and district not in {"All", "All Kerala"}:
+            dist_key = str(district).strip().upper()
+            mask &= (filt["District"].astype(str).str.strip().str.upper() == dist_key)
+        filt = filt[mask]
+        if not filt.empty:
+            grouped = filt.groupby("LBCode", dropna=True)["WardCode"].nunique()
+            counts_2025_by_lb = {str(k): int(v) for k, v in grouped.items()}
+
     rows: List[Dict[str, object]] = []
     for (lb_code, lb_name), wards in wards_2020.items():
-        lb_meta = lb_counts.get(str(lb_code), {"wards_2020": 0, "wards_2025": 0, "new_wards": 0})
+        key = str(lb_code)
+        lb_meta = lb_counts.get(key, {"wards_2020": 0, "wards_2025": 0, "new_wards": 0})
+        wards_2025_val = counts_2025_by_lb.get(key, int(lb_meta.get("wards_2025", 0)))
+        new_val = max(int(wards_2025_val) - int(wards), 0)
         rows.append({
             "LBCode": lb_code,
             "LBName": lb_name,
             "Wards (2020)": int(wards),
-            "Wards (2025)": int(lb_meta.get("wards_2025", 0)),
-            "New Wards": int(lb_meta.get("new_wards", max(lb_meta.get("wards_2025", 0) - wards, 0))),
+            "Wards (2025)": int(wards_2025_val),
+            "New Wards": int(new_val),
             "Total Votes": int(votes.loc[(lb_code, lb_name)]),
         })
 
