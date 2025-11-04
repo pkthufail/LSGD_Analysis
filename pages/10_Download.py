@@ -386,6 +386,18 @@ def _chunk_grouped_text(value: object, max_chars: int) -> List[str]:
     return ['<br/>'.join(html.escape(part) for part in chunk) for chunk in chunks]
 
 
+def _display_header_name(name: object) -> str:
+    """Map internal column names to display labels for PDF tables."""
+    text = str(name)
+    if text == "LBName":
+        return "Local Body"
+    if text == "Other Positions":
+        return "4th or Lower"
+    if text == "WardNames {LBName in Bold: (Name of Wards from each LB in bracket)}":
+        return "WardNames {Local Body in Bold: (Name of Wards from each LB in bracket)}"
+    return text
+
+
 def _ensure_columns(df: pd.DataFrame, columns: list[str], default=0) -> pd.DataFrame:
     out = df.copy()
     for col in columns:
@@ -658,6 +670,32 @@ def _vote_bin_color(label: object) -> str:
     if avg < 85:
         return "#bcefd4"
     return "#8bdcb3"
+
+
+def _normalize_strength_label(label: object) -> str:
+    """Normalize strength band labels from various inputs to our canonical bands.
+    Accepts aliases like '0-50', '0 to 50', etc., mapping them to '1-49' or '50-99'.
+    """
+    if label is None:
+        return "-"
+    text = str(label).strip()
+    if not text:
+        return "-"
+    # Already canonical
+    if text in STRENGTH_COLOR_MAP:
+        return text
+    # Common variants
+    low = text.replace("\u2013", "-").replace("\u2014", "-").replace(" to ", "-").replace(" ", "")
+    # Map a few likely aliases to canonical bins
+    if low in {"0-50", "0-49", "0-048", "0-040", "0-051"}:
+        return "1-49"
+    if low in {"50-100", "50-100+", "50-099", "50-099+"}:
+        return "50-99"
+    if low in {"-50-0", "-49-0"}:
+        return "-1 to -49"
+    if low in {"0", "zero"}:
+        return "0"
+    return text
 def _resolve_ward_label(series_df: pd.DataFrame) -> pd.Series:
     label_cols = ["WardName", "Ward", "WardLabel", "WardNo", "WardCode", "BoothName"]
     for col in label_cols:
@@ -705,9 +743,9 @@ def _build_strength_table(df: pd.DataFrame, sel_party: str) -> pd.DataFrame:
         return pd.DataFrame(columns=["Strength Band", "Ward Count", "Ward Names"])
 
     if "Strength" in part.columns and part["Strength"].notna().any():
-        strength = part["Strength"].astype(str)
+        strength = part["Strength"].apply(_normalize_strength_label)
     elif "Lead" in part.columns:
-        strength = part["Lead"].apply(_strength_from_lead)
+        strength = part["Lead"].apply(_strength_from_lead).apply(_normalize_strength_label)
     else:
         return pd.DataFrame(columns=["Strength Band", "Ward Count", "Ward Names"])
 
@@ -1500,7 +1538,7 @@ def _build_pdf_document(
             continue
 
         table_df = df.reset_index(drop=True)
-        header = [Paragraph(str(col), header_paragraph) for col in table_df.columns]
+        header = [Paragraph(str(_display_header_name(col)), header_paragraph) for col in table_df.columns]
         data = [header]
         for _, row in table_df.iterrows():
             cells = [Paragraph(_format_cell(value), body_paragraph) for value in row.tolist()]
@@ -1508,8 +1546,10 @@ def _build_pdf_document(
         col_width_map = {
             "Front": 70,
             "Party": 70,
+            "Local Body": 70,
             "Strength Band": 100,
             "No. of Wards": 75,
+            "No. of Wards in 2020": 75,
             "No. of Wards in 2025": 90,
             "No of Wards": 75,
             "Ward Count": 75,
@@ -1521,11 +1561,13 @@ def _build_pdf_document(
             "Total Votes": 70,
             "Contested": 50,
             "Other Positions": 60,
+            "4th or Lower": 60,
             "Vote Share (%)": 60,
             "Vote Share": 60,
             "Strike Rate (%)": 60,
             "Strike Rate": 60,
             "WardNames {LBName in Bold: (Name of Wards from each LB in bracket)}": 320,
+            "WardNames {Local Body in Bold: (Name of Wards from each LB in bracket)}": 320,
             "Winning Wards": 180,
             "Losing Wards": 180,
         }
@@ -1550,6 +1592,46 @@ def _build_pdf_document(
                         commands.append(("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor(DEFAULT_BG_COLOR)))
         tbl.setStyle(TableStyle(commands))
         elems.append(tbl)
+        # Color legend as swatches with hex codes
+        try:
+            if isinstance(sec_title, str):
+                if ("Strong & Weak Wards" in sec_title) or ("Lead Strength" in sec_title):
+                    present_bands: list[str] = []
+                    if isinstance(table_df, pd.DataFrame) and "Strength Band" in table_df.columns:
+                        present = [str(x) for x in table_df["Strength Band"].dropna().astype(str).unique().tolist()]
+                        present_bands = [b for b in STRENGTH_ORDER if b in present]
+                    if not present_bands:
+                        present_bands = STRENGTH_ORDER
+                    legend_cells = [Paragraph(band, styles["BodyText"]) for band in present_bands]
+                    if legend_cells:
+                        # Single horizontal row with colored background per cell
+                        col_w = float(doc.width) / float(len(legend_cells))
+                        legend_tbl = Table([legend_cells], colWidths=[col_w] * len(legend_cells))
+                        legend_styles = []
+                        for i, band in enumerate(present_bands):
+                            hex_code = STRENGTH_COLOR_MAP.get(band, DEFAULT_BG_COLOR)
+                            legend_styles.append(("BACKGROUND", (i, 0), (i, 0), colors.HexColor(hex_code)))
+                        legend_tbl.setStyle(TableStyle(legend_styles))
+                        elems.append(Spacer(1, 3))
+                        elems.append(legend_tbl)
+                elif ("Vote Share Analysis" in sec_title) or ("Vote Share Strength" in sec_title):
+                    bins = [
+                        ("#fde2e4", "<30%"),
+                        ("#ffe5a1", "30-45%"),
+                        ("#f8f9fa", "45-55%"),
+                        ("#d4f3e4", "55-70%"),
+                        ("#bcefd4", "70-85%"),
+                        ("#8bdcb3", "85%+"),
+                    ]
+                    legend_cells = [Paragraph(label, styles["BodyText"]) for _, label in bins]
+                    col_w = float(doc.width) / float(len(legend_cells))
+                    legend_tbl = Table([legend_cells], colWidths=[col_w] * len(legend_cells))
+                    legend_styles = [("BACKGROUND", (i, 0), (i, 0), colors.HexColor(hx)) for i, (hx, _) in enumerate(bins)]
+                    legend_tbl.setStyle(TableStyle(legend_styles))
+                    elems.append(Spacer(1, 3))
+                    elems.append(legend_tbl)
+        except Exception:
+            pass
 
     def _draw_header_footer(canvas, doc, show_header: bool) -> None:
         canvas.saveState()
@@ -1652,7 +1734,7 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
     if not summary_table.empty:
         summary_table = summary_table.rename(
             columns={
-                "Wards (2020)": "No. of Wards",
+                "Wards (2020)": "No. of Wards in 2020",
                 "Wards (2025)": "No. of Wards in 2025",
             }
         )
@@ -1661,7 +1743,7 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
             "Summary Table",
             summary_table,
             getattr(summary_result, "row_colors", None),
-            reorder=["LBName", "No. of Wards", "No. of Wards in 2025", "New Wards", "Total Votes"],
+            reorder=["LBName", "No. of Wards in 2020", "No. of Wards in 2025", "New Wards", "Total Votes"],
         )
 
     front_result = front_performance(ward)
@@ -1771,7 +1853,7 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
         lb_order = _rank_column_order(lb_table, ("LBName",))
         _append_table_section(
             sections,
-            f"{sel_party} - LB-wise Performance",
+            f"{sel_party} - Local Body wise Performance",
             lb_table,
             getattr(lb_result, "row_colors", None),
             collapse_ranks=False,
@@ -1785,18 +1867,12 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
         opp_colors = [PARTY_BG_COLORS.get(str(row.get("Party", "")), DEFAULT_BG_COLOR) for _, row in opponent_table.iterrows()]
         sections.append((f"Opponent Breakdown - {sel_party}", opponent_table.reset_index(drop=True), opp_colors))
 
-    strength_fig = strength_chart(ward, sel_party)
-    _append_chart_section(
-        sections,
-        "Number of Strong and Weak Wards",
-        strength_fig,
-        empty_message="No ward-level strength data available for the selected party.",
-    )
+    # (Removed) Do not include the Strong/Weak wards chart in Assembly report
 
     vote_bin_fig = vote_bin_chart(ward, sel_party)
     _append_chart_section(
         sections,
-        "VoteBin Analysis (Won vs Not Won)",
+        "Number of Won & Lost Wards in Vote Share Category",
         vote_bin_fig,
         empty_message="No VoteBin distribution available for the selected party.",
     )
@@ -1804,16 +1880,20 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
     strength_result = strength_table(ward, sel_party)
     strength_frame = getattr(strength_result, "frame", pd.DataFrame())
     if not strength_frame.empty:
+        # Normalize band labels and compute consistent row colors
+        if "Strength Band" in strength_frame.columns:
+            strength_frame["Strength Band"] = strength_frame["Strength Band"].apply(_normalize_strength_label)
         strength_frame = strength_frame.rename(
             columns={
                 "Ward Count": "No of Wards",
             }
         )
+        row_colors = [STRENGTH_COLOR_MAP.get(str(v), DEFAULT_BG_COLOR) for v in strength_frame.get("Strength Band", [])]
         _append_table_section(
             sections,
-            f"{sel_party} - Lead Strength",
+            f"{sel_party} - Strong & Weak Wards",
             strength_frame,
-            getattr(strength_result, "row_colors", None),
+            row_colors,
             reorder=["Strength Band", "No of Wards", "Ward Names"],
             base_cols=("Strength Band",),
         )
@@ -1823,7 +1903,7 @@ def _generate_assembly_sections(df: pd.DataFrame, sel_front: str, sel_party: str
     if not vote_strength_frame.empty:
         _append_table_section(
             sections,
-            f"{sel_party} - Vote Share Strength",
+            f"{sel_party} - Vote Share Analysis",
             vote_strength_frame,
             getattr(vote_strength_result, "row_colors", None),
             reorder=["VoteBin", "Won", "Not Won", "Total", "Winning Wards", "Losing Wards"],
@@ -1931,7 +2011,7 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str, r
         vote_bin_fig = vote_bin_chart(ward, sel_party)
         _append_chart_section(
             sections,
-            "VoteBin Analysis (Won vs Not Won)",
+        "Number of Won & Lost Wards in Vote Share Category",
             vote_bin_fig,
             empty_message="No VoteBin distribution available for the selected party.",
         )
@@ -1944,12 +2024,12 @@ def _generate_scope_sections(df: pd.DataFrame, sel_front: str, sel_party: str, r
         strength_table = _build_strength_table(party_scope, sel_party)
         if not strength_table.empty:
             strength_colors = [STRENGTH_COLOR_MAP.get(str(row.get("Strength Band", "")), DEFAULT_BG_COLOR) for _, row in strength_table.iterrows()]
-            sections.append((f"{sel_party} - Lead Strength", strength_table, strength_colors))
+            sections.append((f"{sel_party} - Strong & Weak Wards", strength_table, strength_colors))
 
         vote_bin = _build_votebin_table(party_scope, sel_party)
         if not vote_bin.empty:
             vote_colors = [_vote_bin_color(row.get("VoteBin")) for _, row in vote_bin.iterrows()]
-            sections.append((f"{sel_party} - Vote Share Strength", vote_bin, vote_colors))
+            sections.append((f"{sel_party} - Vote Share Analysis", vote_bin, vote_colors))
 
         winners_tbl, losers_tbl = _build_candidate_tables(ward, sel_party)
         # For District report, order by LBName then Vote share (%)
@@ -2284,8 +2364,9 @@ def main() -> None:
         # Second table removed; projections merged into first table.
 
         # Extend first table with Strike Rate/Expected/Gain for the Win rows
-        sr_label = "Target% + Strike Rate%"
-        expected_label = "Expected in 2025"
+        # Rename columns as requested for Assembly front page
+        sr_label = "Strike Rate (2020) + Target % (2025)"
+        expected_label = "Expected Seats in 2025"
         for col in [sr_label, expected_label, "Expected Seat Gain"]:
             if col not in fp_table.columns:
                 fp_table[col] = "-"
@@ -2317,7 +2398,7 @@ def main() -> None:
         # Drop '2025 Projection' from visible output
         if "2025 Projection" in fp_table.columns:
             fp_table = fp_table.drop(columns=["2025 Projection"], errors="ignore")
-        # Order display columns
+        # Order display columns and rename headers to final labels
         desired_cols = [
             "Metric",
             "2020 Actuals",
@@ -2326,6 +2407,11 @@ def main() -> None:
             "Expected Seat Gain",
         ]
         fp_table = fp_table[[c for c in desired_cols if c in fp_table.columns]]
+        fp_table = fp_table.rename(columns={
+            "Metric": "Front/Party Contested/Won",
+            "2020 Actuals": "Seats in 2020",
+            "Expected Seat Gain": "Expected Seat Increase",
+        })
 
         front_page = {
             "title": asm_name,
