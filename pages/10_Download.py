@@ -2394,7 +2394,7 @@ def main() -> None:
         for t_label, proj_val in totals_fill.items():
             mask = fp_table["Metric"].astype(str) == t_label
             if mask.any():
-                fp_table.loc[mask, expected_label] = int(proj_val)
+                fp_table.loc[mask, expected_label] = str(int(proj_val))
         # Drop '2025 Projection' from visible output
         if "2025 Projection" in fp_table.columns:
             fp_table = fp_table.drop(columns=["2025 Projection"], errors="ignore")
