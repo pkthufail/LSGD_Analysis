@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 
-DEFAULT_DATA_BASENAME = "data.csv"
+DEFAULT_DATA_BASENAME = "data_2025.csv"
 
 # ---------------- safe secrets helper ----------------
 def _get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
