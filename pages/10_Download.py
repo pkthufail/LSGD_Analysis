@@ -2383,7 +2383,7 @@ def main() -> None:
             except Exception:
                 sr_disp = f"{sr_val} + {tgt}%"
             fp_table.loc[mask, sr_label] = sr_disp
-            fp_table.loc[mask, expected_label] = int(exp_val)
+            fp_table.loc[mask, expected_label] = str(int(exp_val))
             fp_table.loc[mask, "Expected Seat Gain"] = str(gain_val)
         # Also fill Expected in 2025 for Total rows using 2025 Projection totals
         totals_fill = {
